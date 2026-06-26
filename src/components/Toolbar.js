@@ -11,6 +11,8 @@ export function createToolbar(container, store, onSync, onHistory, onBack) {
   toolbar.className = 'bg-surface px-4 py-2 flex items-center gap-2 flex-wrap border-b border-zinc-800';
   toolbar.id = 'toolbar';
 
+  const OPT_DARK_STYLE = 'background:#27272a;color:#f4f4f5;';
+
   toolbar.innerHTML = `
     <button id="btn-sync" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors">
       Sync Pipeline
@@ -22,15 +24,15 @@ export function createToolbar(container, store, onSync, onHistory, onBack) {
       ← Latest
     </button>
     <div class="flex-1"></div>
-    <select id="select-sort" class="px-2 py-1.5 text-xs rounded-md focus:outline-none focus:border-blue-500 toolbar-select">
-      <option>Score ↓</option>
-      <option>Score ↑</option>
-      <option>Date ↓</option>
-      <option>Date ↑</option>
+    <select id="select-sort" class="px-2 py-1.5 text-xs rounded-md focus:outline-none focus:border-blue-500 toolbar-select bg-zinc-800 text-zinc-100 border border-zinc-600">
+      <option style="${OPT_DARK_STYLE}">Score ↓</option>
+      <option style="${OPT_DARK_STYLE}">Score ↑</option>
+      <option style="${OPT_DARK_STYLE}">Date ↓</option>
+      <option style="${OPT_DARK_STYLE}">Date ↑</option>
     </select>
-    <select id="select-mode" class="px-2 py-1.5 text-xs rounded-md focus:outline-none focus:border-blue-500 toolbar-select">
-      <option>Paper Mode</option>
-      <option>Industry News</option>
+    <select id="select-mode" class="px-2 py-1.5 text-xs rounded-md focus:outline-none focus:border-blue-500 toolbar-select bg-zinc-800 text-zinc-100 border border-zinc-600">
+      <option style="${OPT_DARK_STYLE}">Paper Mode</option>
+      <option style="${OPT_DARK_STYLE}">Industry News</option>
     </select>
     <button id="btn-theme" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-surface-card text-zinc-100 hover:bg-surface-hover transition-colors">
       ☀️ Light

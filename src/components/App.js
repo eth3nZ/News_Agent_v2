@@ -24,6 +24,9 @@ const MODE_CONFIG = {
 };
 
 export function initApp(root) {
+  // Sync <html> class with store's default theme so Tailwind dark: variants work on first paint
+  store.setTheme(store.state.theme);
+
   const appContainer = document.createElement('div');
   appContainer.className = 'flex flex-col h-screen bg-surface-light dark:bg-surface';
   root.appendChild(appContainer);
