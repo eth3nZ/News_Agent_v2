@@ -88,6 +88,20 @@ def run_pipeline(mode: BaseMode, raw_data: str, api_key: str) -> dict:
     with open(mode.get_formatting_prompt_path(), "r") as f:
         formatting_instruction = f.read()
 
+    # Inject language requirement into both prompts
+    lang = mode.get_language()
+    lang_req = (
+        f"\n\n# Language Requirement\n"
+        f"All text output — including titles, summaries, takeaways, content, "
+        f"trust reports, analysis, and all other text fields — must be written "
+        f"entirely and exclusively in {lang}. Do not mix languages."
+    )
+    system_prompt += lang_req
+    formatting_instruction += (
+        f"\n\n# Language Requirement\n"
+        f"All text fields in the JSON output must be written entirely in {lang}."
+    )
+
     # Load dedup memory
     seen = load_and_prune_memory(mode.get_data_file_path())
     memory_context = (

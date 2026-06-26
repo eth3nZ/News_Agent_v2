@@ -13,7 +13,7 @@ pub struct PipelineResult {
 }
 
 #[command]
-pub async fn run_pipeline(mode: String) -> Result<PipelineResult, String> {
+pub async fn run_pipeline(mode: String, lang: String) -> Result<PipelineResult, String> {
     let project_root = get_project_root();
     let pipeline_dir = project_root.join("pipeline");
     let main_script = pipeline_dir.join("main.py");
@@ -26,11 +26,15 @@ pub async fn run_pipeline(mode: String) -> Result<PipelineResult, String> {
 
     // Run the blocking Python process on a separate thread so the UI stays responsive
     let inner: Result<PipelineResult, String> = spawn_blocking(move || -> Result<PipelineResult, String> {
-        let output = SyncCommand::new(&python_cmd)
-            .arg(&main_script)
+        let mut cmd = SyncCommand::new(&python_cmd);
+        cmd.arg(&main_script)
             .arg("--mode")
             .arg(&mode)
-            .current_dir(&project_root)
+            .arg("--lang")
+            .arg(&lang)
+            .current_dir(&project_root);
+
+        let output = cmd
             .output()
             .map_err(|e| format!("Failed to execute pipeline: {}", e))?;
 
@@ -40,14 +44,14 @@ pub async fn run_pipeline(mode: String) -> Result<PipelineResult, String> {
         if output.status.success() {
             Ok(PipelineResult {
                 success: true,
-                message: format!("Pipeline completed for mode '{}'", mode),
+                message: format!("Pipeline completed for mode '{}' with lang '{}'", mode, lang),
                 stdout,
                 stderr,
             })
         } else {
             Ok(PipelineResult {
                 success: false,
-                message: format!("Pipeline failed for mode '{}'", mode),
+                message: format!("Pipeline failed for mode '{}' with lang '{}'", mode, lang),
                 stdout,
                 stderr,
             })

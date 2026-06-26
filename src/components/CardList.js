@@ -96,9 +96,15 @@ function sortStories(stories, sortKey) {
   return [...stories].sort((a, b) => {
     let valA, valB;
 
-    if (sortConfig.field === 'novelty' || sortConfig.field === 'credibility') {
-      valA = a.sub_scores?.[sortConfig.field] ?? 0;
-      valB = b.sub_scores?.[sortConfig.field] ?? 0;
+    if (sortConfig.field === 'novelty') {
+      // Paper mode: sub_scores has { novelty, methodology, relevance, clarity }
+      valA = a.sub_scores?.novelty ?? 0;
+      valB = b.sub_scores?.novelty ?? 0;
+    } else if (sortConfig.field === 'credibility') {
+      // Industry mode: sub_scores has { source_quality, writing_depth, attribution, factual_consistency }
+      // Use the top-level credibility_score if available, otherwise compute average of sub_scores
+      valA = a.credibility_score ?? computeCredibilityAvg(a.sub_scores);
+      valB = b.credibility_score ?? computeCredibilityAvg(b.sub_scores);
     } else if (sortConfig.field === 'date') {
       valA = a.date || '';
       valB = b.date || '';
@@ -110,6 +116,19 @@ function sortStories(stories, sortKey) {
 
     return sortConfig.desc ? valB - valA : valA - valB;
   });
+}
+
+function computeCredibilityAvg(subScores) {
+  if (!subScores) return 0;
+  const fields = ['source_quality', 'writing_depth', 'attribution', 'factual_consistency'];
+  let total = 0, count = 0;
+  for (const f of fields) {
+    if (subScores[f] != null) {
+      total += subScores[f];
+      count++;
+    }
+  }
+  return count > 0 ? total / count : 0;
 }
 
 function renderLoading(container) {

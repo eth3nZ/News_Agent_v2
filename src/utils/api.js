@@ -16,10 +16,11 @@ export async function readDataFile(mode) {
 /**
  * Run the Python pipeline for a given mode.
  * @param {string} mode - 'paper' or 'industry'
+ * @param {string} [lang='English'] - Output language for generated text
  * @returns {Promise<object>} Pipeline result { success, message, stdout, stderr }
  */
-export async function runPipeline(mode) {
-  return await invoke('run_pipeline', { mode });
+export async function runPipeline(mode, lang = 'English') {
+  return await invoke('run_pipeline', { mode, lang });
 }
 
 /**

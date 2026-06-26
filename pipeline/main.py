@@ -1,6 +1,6 @@
 """
 Pipeline CLI entry point for Tauri-based News Agent.
-Usage: python main.py --mode paper|industry
+Usage: python main.py --mode paper|industry [--lang English|Chinese]
 """
 
 import argparse
@@ -24,6 +24,8 @@ def main():
     parser = argparse.ArgumentParser(description="News Agent Pipeline")
     parser.add_argument("--mode", required=True, choices=["paper", "industry"],
                         help="Mode to run: paper or industry")
+    parser.add_argument("--lang", default="English",
+                        help="Output language for generated text (default: English)")
     parser.add_argument("--output", help="Write output to this file (optional)")
     args = parser.parse_args()
 
@@ -43,6 +45,10 @@ def main():
     # Initialize mode
     ModeClass = PaperMode if args.mode == "paper" else IndustryMode
     mode = ModeClass()
+
+    # Set output language
+    if args.lang:
+        mode.set_language(args.lang)
 
     print(f"🚀 Running {mode.get_name()} pipeline...")
 

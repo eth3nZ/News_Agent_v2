@@ -45,7 +45,7 @@ For each selected article, you MUST provide:
 - Flag all AI-generated or scraped content with no original reporting.
 
 # Date Handling
-- **IMPORTANT**: For ALL articles, use TODAY's date in YYYY-MM-DD format as the publication date. Do NOT use the date from the RSS feed or article metadata. The date field must reflect the current date when this pipeline runs.
+- **IMPORTANT**: For each article, extract and include the **original publication date** as provided in the source content (e.g., from RSS feed, article metadata, or the page content). Use the date in YYYY-MM-DD format. If the exact date cannot be determined, use the first date mentioned in the article context, or leave as empty string. Do NOT fabricate or overwrite dates.
 
 # URL Extraction
 - Extract the exact, original source URL for every news item. Do not leave this field blank.

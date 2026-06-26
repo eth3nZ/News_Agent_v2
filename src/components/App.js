@@ -51,7 +51,7 @@ export function initApp(root) {
     const config = MODE_CONFIG[state.mode];
     if (config) {
       updateSubtitle(config.subtitle);
-      updateSortOptions(config.sortOptions, state.theme);
+      updateSortOptions(config.sortOptions, state.theme, state.sortKey);
     }
 
     // When mode changes and data was cleared, reload from file
@@ -94,7 +94,7 @@ async function handleSync() {
   if (dot) updateStatus(dot, 'loading');
 
   try {
-    const result = await runPipeline(state.mode);
+    const result = await runPipeline(state.mode, state.lang);
 
     if (result.success) {
       // Re-read the data file after pipeline completes

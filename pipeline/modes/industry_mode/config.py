@@ -43,6 +43,24 @@ class IndustryMode(BaseMode):
                 "name": "Wired",
                 "url": "https://www.wired.com/feed/rss",
                 "type": "rss"
+            },
+            {
+                "name": "36氪",
+                "url": "https://36kr.com/feed",
+                "type": "rss",
+                "max_items": 15
+            },
+            {
+                "name": "量子位",
+                "url": "https://www.qbitai.com/feed",
+                "type": "rss",
+                "max_items": 15
+            },
+            {
+                "name": "IT之家",
+                "url": "https://www.ithome.com/rss/",
+                "type": "rss",
+                "max_items": 15
             }
         ]
 

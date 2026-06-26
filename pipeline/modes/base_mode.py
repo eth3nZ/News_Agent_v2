@@ -76,3 +76,14 @@ class BaseMode(ABC):
             "Date ↓",
             "Date ↑",
         ]
+
+    def get_language(self) -> str:
+        """
+        Return the output language for LLM-generated text.
+        Defaults to 'English'. Override or set via set_language().
+        """
+        return getattr(self, '_language', 'English')
+
+    def set_language(self, lang: str):
+        """Set the output language (e.g., 'English', 'Chinese')."""
+        self._language = lang

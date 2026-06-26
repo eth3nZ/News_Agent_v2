@@ -35,7 +35,7 @@ For each selected paper, you MUST provide:
 6. **real_world_impact**: One paragraph on how this could affect products, research directions, or society.
 
 # Date Handling
-- **IMPORTANT**: For ALL articles, use TODAY's date in YYYY-MM-DD format as the publication date. Do NOT use the date from the RSS feed or article metadata. The date field must reflect the current date when this pipeline runs.
+- **IMPORTANT**: For each paper, extract and include the **original publication date** as provided in the source content (e.g., from arXiv, PDF metadata, or the page content). Use the date in YYYY-MM-DD format. If the exact date cannot be determined, use the first date mentioned in the article context, or leave as empty string. Do NOT fabricate or overwrite dates.
 
 # Constraints
 - Keep only stories that score **>= 7.0**.

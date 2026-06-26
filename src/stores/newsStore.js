@@ -11,6 +11,7 @@ class NewsStore {
       loading: false,          // Sync in progress
       error: null,             // Error message
       sortKey: 'Score ↓',     // Current sort
+      lang: 'English',         // Output language for LLM generation
       viewingHistory: false,   // Viewing a history snapshot
       historyEntries: [],      // Available history snapshots
     };
@@ -53,6 +54,10 @@ class NewsStore {
 
   setSortKey(sortKey) {
     this._update({ sortKey });
+  }
+
+  setLang(lang) {
+    this._update({ lang });
   }
 
   setLoading(loading) {
