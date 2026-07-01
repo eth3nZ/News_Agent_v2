@@ -1,12 +1,13 @@
 /**
- * Toolbar component — mode switch, sync, theme toggle, sort, language, history.
+ * Toolbar component — mode switch, sync, theme toggle, sort, language, history, settings.
  * @param {HTMLElement} container
  * @param {object} store - reactive store
  * @param {Function} onSync - sync callback
  * @param {Function} onHistory - history browser callback
  * @param {Function} onBack - back to latest callback
+ * @param {Function} onSettings - settings modal callback
  */
-export function createToolbar(container, store, onSync, onHistory, onBack) {
+export function createToolbar(container, store, onSync, onHistory, onBack, onSettings) {
   const toolbar = document.createElement('div');
   toolbar.className = 'bg-surface px-4 py-2 flex items-center gap-2 flex-wrap border-b border-zinc-800';
   toolbar.id = 'toolbar';
@@ -38,6 +39,9 @@ export function createToolbar(container, store, onSync, onHistory, onBack) {
       <option style="${OPT_DARK_STYLE}">Paper Mode</option>
       <option style="${OPT_DARK_STYLE}">Industry News</option>
     </select>
+    <button id="btn-settings" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-surface-card text-zinc-100 hover:bg-surface-hover transition-colors" title="Settings">
+      ⚙️
+    </button>
     <button id="btn-theme" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-surface-card text-zinc-100 hover:bg-surface-hover transition-colors">
       ☀️ Light
     </button>
@@ -49,6 +53,7 @@ export function createToolbar(container, store, onSync, onHistory, onBack) {
   document.getElementById('btn-sync').addEventListener('click', onSync);
   document.getElementById('btn-history').addEventListener('click', onHistory);
   document.getElementById('btn-back').addEventListener('click', onBack);
+  document.getElementById('btn-settings').addEventListener('click', onSettings);
 
   document.getElementById('select-mode').addEventListener('change', (e) => {
     const idx = e.target.selectedIndex;
@@ -98,8 +103,8 @@ export function createToolbar(container, store, onSync, onHistory, onBack) {
     // Update theme button text
     document.getElementById('btn-theme').textContent = isDark ? '☀️ Light' : '🌙 Dark';
 
-    // Update button styles (history, theme)
-    const buttons = ['btn-history', 'btn-theme'];
+    // Update button styles (history, theme, settings)
+    const buttons = ['btn-history', 'btn-theme', 'btn-settings'];
     buttons.forEach(id => {
       const btn = document.getElementById(id);
       if (btn) btn.className = isDark ? TAILWIND_CLASSES.btnBase.dark : TAILWIND_CLASSES.btnBase.light;
@@ -111,7 +116,6 @@ export function createToolbar(container, store, onSync, onHistory, onBack) {
       const sel = document.getElementById(id);
       if (sel) {
         sel.className = isDark ? TAILWIND_CLASSES.select.dark : TAILWIND_CLASSES.select.light;
-        // Update option styles (inline styles work more reliably across browsers for <option>)
         const optStyle = isDark ? TAILWIND_CLASSES.option.dark : TAILWIND_CLASSES.option.light;
         Array.from(sel.options).forEach(opt => {
           opt.style.background = optStyle.background;
@@ -144,7 +148,6 @@ export function updateSortOptions(options, theme = 'dark', currentSortKey) {
   const bg = isDark ? '#27272a' : '#ffffff';
   const fg = isDark ? '#f4f4f5' : '#3f3f46';
   sel.innerHTML = options.map(o => `<option style="background:${bg};color:${fg};">${o}</option>`).join('');
-  // Sync the selected index to match the store's current sortKey after rebuild
   if (currentSortKey) {
     const idx = options.indexOf(currentSortKey);
     if (idx !== -1) {

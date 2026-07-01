@@ -65,6 +65,18 @@ class BaseMode(ABC):
         """Keywords to filter out during scraping."""
         return ["funding", "seed round", "series a", "ventures", "acquired", "appoints", "hiring", "shares slip"]
 
+    def get_scraper_required_keywords(self) -> list[str]:
+        """Keywords that at least one scraped entry should match. Empty means no required match."""
+        return []
+
+    def get_scraper_recent_days(self) -> int | None:
+        """Limit scraped entries to this many recent days. None disables date filtering."""
+        return None
+
+    def get_scraper_max_entries_per_source(self) -> int | None:
+        """Limit entries returned from each source after filtering. None means no extra cap."""
+        return None
+
     def get_sort_options(self) -> list[str]:
         """
         Return the list of sort options for the toolbar dropdown.

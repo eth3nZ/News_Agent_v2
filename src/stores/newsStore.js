@@ -14,6 +14,10 @@ class NewsStore {
       lang: 'English',         // Output language for LLM generation
       viewingHistory: false,   // Viewing a history snapshot
       historyEntries: [],      // Available history snapshots
+      apiKey: '',              // LLM API key
+      baseUrl: 'https://api.ds.com', // LLM API base URL
+      model: 'glm-5.2',    // LLM model name
+      syncTime: 0,             // Auto-sync minute of day (0 = manual)
     };
     this._listeners = new Map();
     this._listenerId = 0;
@@ -78,6 +82,19 @@ class NewsStore {
 
   setHistoryEntries(entries) {
     this._update({ historyEntries: entries });
+  }
+
+  setSettings(apiKey, baseUrl, model, syncTime) {
+    this._update({
+      apiKey,
+      baseUrl,
+      model,
+      ...(syncTime !== undefined ? { syncTime } : {}),
+    });
+  }
+
+  setSyncTime(syncTime) {
+    this._update({ syncTime });
   }
 }
 

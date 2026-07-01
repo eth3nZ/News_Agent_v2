@@ -55,6 +55,9 @@ export function createModal(story, isPaperMode, onClose) {
 }
 
 async function openExternal(url) {
+  url = normalizeHttpUrl(url);
+  if (!url) return;
+
   try {
     const { open } = await import('@tauri-apps/plugin-shell');
     await open(url);
@@ -65,7 +68,7 @@ async function openExternal(url) {
 }
 
 function buildPaperModal(story) {
-  const url = story.source_url || '';
+  const url = normalizeHttpUrl(story.source_url || '');
   const sub = story.sub_scores || {};
   const tldr = story.tl_dr || '';
   const lay = story.lay_summary || '';
@@ -153,7 +156,7 @@ function buildPaperModal(story) {
       ${content ? `
         <div class="mb-4">
           <p class="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-3">Deep Technical Analysis</p>
-          <div class="text-sm text-gray-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">${escapeHtml(content)}</div>
+          <div class="text-sm leading-relaxed">${renderContent(content)}</div>
         </div>
       ` : ''}
     </div>
@@ -161,7 +164,7 @@ function buildPaperModal(story) {
 }
 
 function buildNewsModal(story) {
-  const url = story.source_url || '';
+  const url = normalizeHttpUrl(story.source_url || '');
   const sub = story.sub_scores || {};
   const cred = story.credibility_score || 0;
   const category = story.category || 'industry_update';
@@ -242,7 +245,7 @@ function buildNewsModal(story) {
       ${content ? `
         <div class="mb-4">
           <p class="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-3">Full Analysis</p>
-          <div class="text-sm text-gray-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">${escapeHtml(content)}</div>
+          <div class="text-sm leading-relaxed">${renderContent(content)}</div>
         </div>
       ` : ''}
     </div>
@@ -258,10 +261,56 @@ function buildModalSubScores(sub, labels) {
   return `
     <div class="flex gap-4 mb-4 flex-wrap">
       ${items.map(([label, key]) => {
-        const val = sub[key] || 0;
+        const val = Number(sub[key]) || 0;
         return `<span class="text-xs text-gray-500 dark:text-zinc-500">${label}: <strong class="text-gray-700 dark:text-zinc-300">${val.toFixed(1)}</strong></span>`;
       }).join('')}
     </div>
+  `;
+}
+
+/**
+ * Convert lightweight markdown-ish content into readable modal sections.
+ * Supports **Header**: text, **Header**, and Header: text formats.
+ */
+function renderContent(content) {
+  if (!content) return "";
+  const lines = content.split("\n");
+  return lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return "";
+
+    const headerMatch = trimmed.match(/^\*\*(.+?)\*\*:?\s*(.*)$/);
+    if (headerMatch) {
+      return renderSectionLine(headerMatch[1], headerMatch[2]);
+    }
+
+    const plainHeaderMatch = trimmed.match(/^([A-Za-z][A-Za-z /-]{2,40}):\s*(.*)$/);
+    if (plainHeaderMatch) {
+      return renderSectionLine(plainHeaderMatch[1], plainHeaderMatch[2]);
+    }
+
+    const bulletMatch = trimmed.match(/^[-•]\s+(.*)$/);
+    if (bulletMatch) {
+      return `<p class="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed mb-1 pl-4">• ${escapeHtml(bulletMatch[1])}</p>`;
+    }
+
+    return `<p class="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed mb-2">${escapeHtml(trimmed)}</p>`;
+  }).join("");
+}
+
+function renderSectionLine(headerText, restText) {
+  const header = escapeHtml(headerText.trim());
+  const rest = escapeHtml((restText || '').trim().replace(/^[:：]\s*/, ''));
+
+  if (!rest) {
+    return `<h3 class="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mt-4 mb-1">${header}</h3>`;
+  }
+
+  return `
+    <section class="mb-3">
+      <h3 class="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1">${header}</h3>
+      <p class="text-sm text-gray-700 dark:text-zinc-300 leading-relaxed">${rest}</p>
+    </section>
   `;
 }
 
@@ -270,4 +319,15 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+function normalizeHttpUrl(url) {
+  if (!url) return '';
+  const value = String(url).trim();
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? value : '';
+  } catch {
+    return '';
+  }
 }

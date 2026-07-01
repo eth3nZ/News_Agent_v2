@@ -7,7 +7,7 @@
  */
 export function createCard(story, isPaperMode, onClick) {
   const article = document.createElement('article');
-   article.className = 'bg-white dark:bg-surface-card rounded-xl p-5 mx-4 my-3 card-hover cursor-pointer border border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 animate-slide-up';
+  article.className = 'bg-white dark:bg-surface-card rounded-xl p-5 mx-4 my-3 card-hover cursor-pointer border border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 animate-slide-up';
 
   if (isPaperMode) {
     article.innerHTML = buildPaperCard(story);
@@ -15,7 +15,12 @@ export function createCard(story, isPaperMode, onClick) {
     article.innerHTML = buildNewsCard(story);
   }
 
-  article.addEventListener('click', () => onClick(story));
+  article.addEventListener('click', (event) => {
+    if (event.target.closest('button, a, input, select, textarea, [data-card-ignore-click]')) {
+      return;
+    }
+    onClick(story);
+  });
 
   return article;
 }
@@ -33,10 +38,10 @@ function buildPaperCard(story) {
   const terms = story.key_terms || [];
   const impact = story.real_world_impact || '';
   const dateStr = story.date || 'Recent Release';
-  const url = story.source_url || '';
+  const url = normalizeHttpUrl(story.source_url || '');
 
   return `
-     <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center justify-between mb-3">
       <div class="flex gap-2">
         <span class="text-[10px] font-bold text-white px-2 py-0.5 rounded" style="background:${badgeColor}">
           ${category.replace(/_/g, ' ').toUpperCase()}
@@ -94,7 +99,7 @@ function buildNewsCard(story) {
   const takeaway = story.takeaway || '';
   const summary = story.summary || '';
   const dateStr = story.date || '';
-  const url = story.source_url || '';
+  const url = normalizeHttpUrl(story.source_url || '');
 
   return `
     <div class="flex items-center justify-between mb-3">
@@ -166,4 +171,15 @@ function escapeHtml(str) {
 function truncateStr(str, maxLen) {
   if (!str || str.length <= maxLen) return str || '';
   return str.substring(0, maxLen) + '...';
+}
+
+function normalizeHttpUrl(url) {
+  if (!url) return '';
+  const value = String(url).trim();
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? value : '';
+  } catch {
+    return '';
+  }
 }

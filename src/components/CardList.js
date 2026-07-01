@@ -55,8 +55,8 @@ function renderCards(container, state) {
     return;
   }
 
-  // Sort stories
-  stories = sortStories(stories, sortKey);
+  // Sort stories (mode-aware: "Score" maps to credibility_score in industry mode)
+  stories = sortStories(stories, sortKey, mode);
 
   // Summary header
   if (summary) {
@@ -77,30 +77,28 @@ function renderCards(container, state) {
   });
 }
 
-function sortStories(stories, sortKey) {
+function sortStories(stories, sortKey, mode) {
+  // Paper mode: score is a top-level field "score"
+  // Industry mode: score is a top-level field "credibility_score"
+  const isIndustry = mode === 'industry';
+
   const keyMap = {
-    'Score ↓': { field: 'score', desc: true },
-    'Score ↑': { field: 'score', desc: false },
+    'Score ↓': { field: isIndustry ? 'credibility_score' : 'score', desc: true },
+    'Score ↑': { field: isIndustry ? 'credibility_score' : 'score', desc: false },
     'Difficulty ↓': { field: 'difficulty', desc: true },
     'Difficulty ↑': { field: 'difficulty', desc: false },
     'Date ↓': { field: 'date', desc: true },
     'Date ↑': { field: 'date', desc: false },
-    'Novelty ↓': { field: 'novelty', desc: true },
-    'Novelty ↑': { field: 'novelty', desc: false },
     'Credibility ↓': { field: 'credibility', desc: true },
     'Credibility ↑': { field: 'credibility', desc: false },
   };
 
-  const sortConfig = keyMap[sortKey] || { field: 'score', desc: true };
+  const sortConfig = keyMap[sortKey] || { field: isIndustry ? 'credibility_score' : 'score', desc: true };
 
   return [...stories].sort((a, b) => {
     let valA, valB;
 
-    if (sortConfig.field === 'novelty') {
-      // Paper mode: sub_scores has { novelty, methodology, relevance, clarity }
-      valA = a.sub_scores?.novelty ?? 0;
-      valB = b.sub_scores?.novelty ?? 0;
-    } else if (sortConfig.field === 'credibility') {
+    if (sortConfig.field === 'credibility') {
       // Industry mode: sub_scores has { source_quality, writing_depth, attribution, factual_consistency }
       // Use the top-level credibility_score if available, otherwise compute average of sub_scores
       valA = a.credibility_score ?? computeCredibilityAvg(a.sub_scores);

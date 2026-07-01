@@ -17,10 +17,33 @@ export async function readDataFile(mode) {
  * Run the Python pipeline for a given mode.
  * @param {string} mode - 'paper' or 'industry'
  * @param {string} [lang='English'] - Output language for generated text
+ * @param {string} [apiKey=''] - LLM API key
+ * @param {string} [baseUrl=''] - LLM API base URL
+ * @param {string} [model=''] - LLM model name
  * @returns {Promise<object>} Pipeline result { success, message, stdout, stderr }
  */
-export async function runPipeline(mode, lang = 'English') {
-  return await invoke('run_pipeline', { mode, lang });
+export async function runPipeline(mode, lang = 'English', apiKey = '', baseUrl = '', model = '') {
+  return await invoke('run_pipeline', { mode, lang, apiKey, baseUrl, model });
+}
+
+/**
+ * Save settings including sync time.
+ * @param {string} apiKey - LLM API key
+ * @param {string} baseUrl - LLM API base URL
+ * @param {string} model - LLM model name
+ * @param {number} syncTime - Auto-sync minute of day (0 = manual only)
+ * @returns {Promise<void>}
+ */
+export async function saveSettings(apiKey, baseUrl, model, syncTime = 0) {
+  return await invoke('save_settings', { apiKey, baseUrl, model, syncTime });
+}
+
+/**
+ * Load settings from the backend.
+ * @returns {Promise<object>} Settings object with apiKey, baseUrl, model, syncTime
+ */
+export async function loadSettings() {
+  return await invoke('load_settings');
 }
 
 /**
