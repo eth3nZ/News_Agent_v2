@@ -1,8 +1,12 @@
 use std::path::PathBuf;
-use std::process::Command as SyncCommand;
+use std::process::{Command as SyncCommand, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 use tauri::command;
 use serde::{Deserialize, Serialize};
 use tokio::task::spawn_blocking;
+
+const PIPELINE_TIMEOUT_SECONDS: u64 = 300;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PipelineResult {
@@ -13,7 +17,7 @@ pub struct PipelineResult {
 }
 
 #[command]
-pub async fn run_pipeline(mode: String, lang: String) -> Result<PipelineResult, String> {
+pub async fn run_pipeline(mode: String, lang: String, api_key: String, base_url: String, model: String) -> Result<PipelineResult, String> {
     let project_root = get_project_root();
     let pipeline_dir = project_root.join("pipeline");
     let main_script = pipeline_dir.join("main.py");
@@ -32,16 +36,56 @@ pub async fn run_pipeline(mode: String, lang: String) -> Result<PipelineResult, 
             .arg(&mode)
             .arg("--lang")
             .arg(&lang)
-            .current_dir(&project_root);
+            .arg("--api-key")
+            .arg(&api_key)
+            .arg("--base-url")
+            .arg(&base_url)
+            .arg("--model")
+            .arg(&model)
+            .current_dir(&project_root)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
-        let output = cmd
-            .output()
+        let mut child = cmd
+            .spawn()
             .map_err(|e| format!("Failed to execute pipeline: {}", e))?;
+
+        let deadline = Instant::now() + Duration::from_secs(PIPELINE_TIMEOUT_SECONDS);
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) => {
+                    if Instant::now() >= deadline {
+                        let _ = child.kill();
+                        let output = child
+                            .wait_with_output()
+                            .map_err(|e| format!("Pipeline timed out and failed to collect output: {}", e))?;
+                        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+                        return Ok(PipelineResult {
+                            success: false,
+                            message: format!(
+                                "Pipeline timed out after {} seconds for mode '{}'",
+                                PIPELINE_TIMEOUT_SECONDS, mode
+                            ),
+                            stdout,
+                            stderr,
+                        });
+                    }
+                    thread::sleep(Duration::from_millis(500));
+                }
+                Err(e) => return Err(format!("Failed while waiting for pipeline: {}", e)),
+            }
+        };
+
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("Failed to collect pipeline output: {}", e))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
-        if output.status.success() {
+        if status.success() {
             Ok(PipelineResult {
                 success: true,
                 message: format!("Pipeline completed for mode '{}' with lang '{}'", mode, lang),

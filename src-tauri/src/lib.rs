@@ -4,6 +4,7 @@ use commands::read_data::{read_data_file, read_data_file_raw};
 use commands::run_pipeline::run_pipeline;
 use commands::list_history::list_history_files;
 use commands::clear_history::clear_history_files;
+use commands::settings::{save_settings, load_settings};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -15,6 +16,8 @@ pub fn run() {
             run_pipeline,
             list_history_files,
             clear_history_files,
+            save_settings,
+            load_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
