@@ -1,7 +1,7 @@
 use tauri::{command, AppHandle, Emitter};
 use serde::{Deserialize, Serialize};
 
-const PIPELINE_SERVER_URL: &str = "http://127.0.0.1:8765";
+const PIPELINE_SERVER_URL: &str = "http://127.0.0.1:8080";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PipelineProgress {
@@ -54,7 +54,7 @@ pub async fn run_pipeline(
         },
     );
 
-    let url = format!("{}/run", PIPELINE_SERVER_URL);
+    let url = format!("{}/api/v1/pipeline/run", PIPELINE_SERVER_URL);
 
     let request = RunRequest {
         mode,
