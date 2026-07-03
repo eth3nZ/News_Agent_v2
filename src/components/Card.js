@@ -7,6 +7,23 @@
  * @returns {HTMLElement}
  */
 import { escapeHtml, normalizeHttpUrl, truncateStr } from '../utils/helpers.js';
+import { t } from '../utils/translator.js';
+import { store } from '../stores/newsStore.js';
+
+/**
+ * Open a URL in the system browser via Tauri shell plugin.
+ */
+async function openExternal(url) {
+  url = normalizeHttpUrl(url);
+  if (!url) return;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('plugin:shell|open', { path: url });
+  } catch (e) {
+    console.warn('Tauri shell open failed, using browser fallback:', e);
+    window.open(url, '_blank');
+  }
+}
 
 export function createCard(story, isPaperMode, onClick, useChinese = false) {
   const article = document.createElement('article');
@@ -18,54 +35,41 @@ export function createCard(story, isPaperMode, onClick, useChinese = false) {
     article.innerHTML = buildNewsCard(story, useChinese);
   }
 
+  // Handle external link clicks (open in browser)
+  article.querySelectorAll('.external-link').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const url = el.dataset.url;
+      if (url) openExternal(url);
+    });
+  });
+
+  // Handle bookmark button click
+  const bookmarkBtn = article.querySelector('.bookmark-btn');
+  if (bookmarkBtn) {
+    bookmarkBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      store.toggleBookmark(story.source_url || story.url || '');
+      // Update star icon immediately
+      const star = bookmarkBtn.querySelector('.bookmark-icon');
+      if (star) {
+        const isBookmarked = store.isBookmarked(story.source_url || story.url || '');
+        star.textContent = isBookmarked ? '★' : '☆';
+        star.classList.toggle('text-amber-400', isBookmarked);
+        star.classList.toggle('text-zinc-500', !isBookmarked);
+      }
+    });
+  }
+
+  // Open modal on card click (except when clicking interactive elements)
   article.addEventListener('click', (event) => {
-    if (event.target.closest('button, a, input, select, textarea, [data-card-ignore-click]')) {
+    if (event.target.closest('button, a, input, select, textarea, [data-card-ignore-click], .external-link, .bookmark-btn')) {
       return;
     }
     onClick(story);
   });
 
   return article;
-}
-
-/**
- * Detect whether a text string is Chinese or English.
- * Returns 'zh' if text contains Chinese characters, 'en' otherwise.
- */
-function detectTextLang(text) {
-  return /[\u4e00-\u9fff]/.test(text) ? 'zh' : 'en';
-}
-
-/**
- * Get the right text to display based on current language.
- *
- * Logic:
- * - translations._source tells us what language the original fields are in
- * - If user wants Chinese (`useChinese=true`) and source is Chinese → show original
- * - If user wants Chinese (`useChinese=true`) and source is English → show translation
- * - If user wants English (`useChinese=false`) and source is English → show original
- * - If user wants English (`useChinese=false`) and source is Chinese → show translation
- *
- * When no translations._source exists (no translations at all), the function
- * detects the language of the original text to make the right decision.
- */
-function t(original, field, useChinese, story) {
-  const translations = story.translations || {};
-
-  // Detect source language: prefer translations._source, fallback to text heuristics
-  let sourceLang = translations._source;
-  if (!sourceLang && original) {
-    sourceLang = detectTextLang(original);
-  }
-  sourceLang = sourceLang || 'en';
-
-  if (useChinese) {
-    // Want Chinese: if source is Chinese, show original; else show translation
-    return sourceLang === 'zh' ? original : (translations[field] || original);
-  } else {
-    // Want English: if source is English, show original; else show translation
-    return sourceLang === 'en' ? original : (translations[field] || original);
-  }
 }
 
 function buildPaperCard(story, useChinese) {
@@ -83,6 +87,7 @@ function buildPaperCard(story, useChinese) {
   const dateStr = story.date || 'Recent Release';
   const url = normalizeHttpUrl(story.source_url || '');
   const title = t(story.title || '', 'title', useChinese, story);
+  const isBookmarked = store.isBookmarked(url);
 
   return `
     <div class="flex items-center justify-between mb-3">
@@ -94,7 +99,12 @@ function buildPaperCard(story, useChinese) {
           Difficulty: ${Math.round(difficulty)}/10
         </span>
       </div>
-      <span class="text-xs font-bold text-gray-900 dark:text-white" style="color:${sc}">Score: ${score.toFixed(1)}/10</span>
+      <div class="flex items-center gap-2">
+        <button class="bookmark-btn p-1 hover:scale-110 transition-transform" title="${isBookmarked ? 'Unbookmark' : 'Bookmark'}">
+          <span class="bookmark-icon text-lg ${isBookmarked ? 'text-amber-400' : 'text-zinc-500'}">${isBookmarked ? '★' : '☆'}</span>
+        </button>
+        <span class="text-xs font-bold text-gray-900 dark:text-white" style="color:${sc}">Score: ${score.toFixed(1)}/10</span>
+      </div>
     </div>
 
     <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-2 leading-snug">${escapeHtml(title)}</h2>
@@ -111,7 +121,7 @@ function buildPaperCard(story, useChinese) {
 
     <div class="flex items-center justify-between mt-3 pt-3 border-t border-zinc-800 dark:border-gray-200">
       <span class="text-[11px] text-gray-500 dark:text-zinc-500 italic">${dateStr}</span>
-      <span class="text-[10px] text-blue-600 dark:text-blue-400 truncate max-w-[200px]">${truncateStr(url, 50)}</span>
+      ${url ? `<span class="external-link text-[10px] text-blue-600 dark:text-blue-400 truncate max-w-[200px] cursor-pointer hover:underline" data-url="${escapeHtml(url)}">${truncateStr(url, 50)}</span>` : ''}
     </div>
 
     ${terms.length > 0 ? `
@@ -145,6 +155,7 @@ function buildNewsCard(story, useChinese) {
   const dateStr = story.date || '';
   const url = normalizeHttpUrl(story.source_url || '');
   const title = t(story.title || '', 'title', useChinese, story);
+  const isBookmarked = store.isBookmarked(url);
 
   return `
     <div class="flex items-center justify-between mb-3">
@@ -158,7 +169,12 @@ function buildNewsCard(story, useChinese) {
           </span>
         ` : ''}
       </div>
-      <span class="text-xs font-bold" style="color:${credColor}">Trust: ${cred.toFixed(1)}/10</span>
+      <div class="flex items-center gap-2">
+        <button class="bookmark-btn p-1 hover:scale-110 transition-transform" title="${isBookmarked ? 'Unbookmark' : 'Bookmark'}">
+          <span class="bookmark-icon text-lg ${isBookmarked ? 'text-amber-400' : 'text-zinc-500'}">${isBookmarked ? '★' : '☆'}</span>
+        </button>
+        <span class="text-xs font-bold" style="color:${credColor}">Trust: ${cred.toFixed(1)}/10</span>
+      </div>
     </div>
 
     <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-2 leading-snug">${escapeHtml(title)}</h2>
@@ -180,7 +196,7 @@ function buildNewsCard(story, useChinese) {
 
     ${url ? `
       <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-zinc-800">
-        <span class="text-[10px] text-blue-600 dark:text-blue-400 truncate max-w-[400px]">${truncateStr(url, 60)}</span>
+        <span class="external-link text-[10px] text-blue-600 dark:text-blue-400 truncate max-w-[400px] cursor-pointer hover:underline" data-url="${escapeHtml(url)}">${truncateStr(url, 60)}</span>
       </div>
     ` : ''}
   `;

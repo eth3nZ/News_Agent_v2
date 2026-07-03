@@ -3,7 +3,7 @@
  */
 import { store } from '../stores/newsStore.js';
 import { readDataFile, runPipeline, writeDataFile } from './api.js';
-import { translateAllStories } from './translator.js';
+import { translateAllStories, detectTextLang } from './translator.js';
 
 let phaseTimers = [];
 
@@ -26,7 +26,13 @@ export async function loadCurrentData() {
     );
     if (needsTranslation && state.baiduAppId && state.baiduSecretKey) {
       try {
-        const added = await translateAllStories(data, state.baiduAppId, state.baiduSecretKey);
+        // Detect the actual language of data to determine translation direction
+        const firstStory = data.top_stories[0];
+        const sampleField = firstStory?.title || firstStory?.summary || firstStory?.takeaway || firstStory?.lay_summary || '';
+        const sourceLang = detectTextLang(sampleField) || 'en';
+        const targetLang = sourceLang === 'zh' ? 'en' : 'zh';
+
+        const added = await translateAllStories(data, state.baiduAppId, state.baiduSecretKey, targetLang);
         if (added) {
           await writeDataFile(state.mode, data);
           const freshData = await readDataFile(state.mode);
@@ -76,8 +82,14 @@ function stopPhaseSimulation() {
  * This stores the "other" language version in story.translations so language switching
  * is instant — no re-sync or re-translate needed.
  *
- * - If LLM generated English stories (lang === 'English') → translate to Chinese
- * - If LLM generated Chinese stories (lang === 'Chinese') → translate to English
+ * Translation direction is determined by detecting the actual language of the first
+ * story's text, rather than relying on state.lang:
+ * - If the first story's field is Chinese → translate to English (targetLang='en')
+ * - If the first story's field is English → translate to Chinese (targetLang='zh')
+ *
+ * This works correctly for all modes:
+ * - Industry mode: pipeline produces English → translates to Chinese
+ * - Paper mode: pipeline produces Chinese → translates to English
  *
  * Returns true if any translations were added, false otherwise.
  */
@@ -86,10 +98,15 @@ async function autoTranslateIfNeeded(data, state) {
 
   const { baiduAppId, baiduSecretKey } = state;
 
-  // Determine translation direction:
-  // "Chinese" → original is Chinese, translate to English (targetLang='en')
-  // "English" → original is English, translate to Chinese (targetLang='zh')
-  const targetLang = state.lang === 'Chinese' ? 'en' : 'zh';
+  // Detect the original language of the first story to determine translation direction
+  const firstStory = data.top_stories[0];
+  const sampleField = firstStory?.title || firstStory?.summary || firstStory?.takeaway || firstStory?.lay_summary || '';
+  const sourceLang = detectTextLang(sampleField) || 'en';
+
+  // We translate INTO the opposite language of the source
+  // If source is Chinese → translate to English (targetLang='en')
+  // If source is English → translate to Chinese (targetLang='zh')
+  const targetLang = sourceLang === 'zh' ? 'en' : 'zh';
 
   const added = await translateAllStories(data, baiduAppId, baiduSecretKey, targetLang);
   if (added) {

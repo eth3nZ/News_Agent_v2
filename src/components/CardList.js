@@ -10,6 +10,7 @@ import { createCard } from './Card.js';
 import { createModal } from './Modal.js';
 import { translateAllStories } from '../utils/translator.js';
 import { writeDataFile, readDataFile } from '../utils/api.js';
+import { store } from '../stores/newsStore.js';
 
 // Track whether we've already translated the current data batch
 let _lastTranslatedData = null;
@@ -43,7 +44,7 @@ export function createCardList(container, store) {
 function renderCards(container, state, store) {
   container.innerHTML = '';
 
-  const { data, mode, sortKey, loading, error, phase, lang } = state;
+  const { data, mode, sortKey, loading, error, phase, lang, showBookmarkedOnly, bookmarkedUrls } = state;
 
   if (loading) {
     renderLoading(container, phase);
@@ -74,6 +75,11 @@ function renderCards(container, state, store) {
 
   // Sort stories (mode-aware: "Score" maps to credibility_score in industry mode)
   stories = sortStories(stories, sortKey, mode);
+
+  // Filter by bookmarked only if enabled
+  if (showBookmarkedOnly) {
+    stories = stories.filter(s => bookmarkedUrls.includes(s.source_url || s.url || ''));
+  }
 
   // Summary header
   if (summary) {

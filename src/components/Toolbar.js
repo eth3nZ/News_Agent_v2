@@ -24,6 +24,9 @@ export function createToolbar(container, store, onSync, onHistory, onBack, onSet
     <button id="btn-back" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors hidden">
       ← Latest
     </button>
+    <button id="btn-bookmark-filter" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-surface-card text-zinc-100 hover:bg-surface-hover transition-colors" title="Show only bookmarked items">
+      ☆ Bookmarks
+    </button>
     <div class="flex-1"></div>
     <select id="select-lang" class="px-2 py-1.5 text-xs rounded-md focus:outline-none focus:border-blue-500 toolbar-select bg-zinc-800 text-zinc-100 border border-zinc-600">
       <option style="${OPT_DARK_STYLE}" value="English">English</option>
@@ -71,6 +74,10 @@ export function createToolbar(container, store, onSync, onHistory, onBack, onSet
 
   document.getElementById('btn-theme').addEventListener('click', () => {
     store.toggleTheme();
+  });
+
+  document.getElementById('btn-bookmark-filter').addEventListener('click', () => {
+    store.toggleShowBookmarkedOnly();
   });
 
   // Define theme classes that Tailwind can see at build time
@@ -135,6 +142,16 @@ export function createToolbar(container, store, onSync, onHistory, onBack, onSet
     const backBtn = document.getElementById('btn-back');
     if (backBtn) {
       backBtn.classList.toggle('hidden', !state.viewingHistory);
+    }
+
+    // Update bookmark filter button
+    const bookmarkBtn = document.getElementById('btn-bookmark-filter');
+    if (bookmarkBtn) {
+      const isActive = state.showBookmarkedOnly;
+      bookmarkBtn.innerHTML = isActive ? '★ Bookmarks' : '☆ Bookmarks';
+      bookmarkBtn.className = isActive
+        ? 'px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors'
+        : (isDark ? TAILWIND_CLASSES.btnBase.dark : TAILWIND_CLASSES.btnBase.light);
     }
   });
 

@@ -18,6 +18,52 @@
 import { baiduTranslate } from './api.js';
 
 /**
+ * Detect whether a text string is Chinese or English.
+ * Returns 'zh' if text contains Chinese characters, 'en' otherwise.
+ */
+export function detectTextLang(text) {
+  return /[\u4e00-\u9fff]/.test(text) ? 'zh' : 'en';
+}
+
+/**
+ * Get the right text to display based on current language preference.
+ *
+ * Logic:
+ * - translations._source tells us what language the original fields are in
+ * - If user wants Chinese (useChinese=true) and source is Chinese → show original
+ * - If user wants Chinese (useChinese=true) and source is English → show translation
+ * - If user wants English (useChinese=false) and source is English → show original
+ * - If user wants English (useChinese=false) and source is Chinese → show translation
+ *
+ * When no translations._source exists (no translations at all), the function
+ * detects the language of the original text to make the right decision.
+ *
+ * @param {string} original - Original text from story field
+ * @param {string} field - Field name (e.g. 'title', 'summary')
+ * @param {boolean} useChinese - Whether user wants Chinese display
+ * @param {object} story - Full story object (to access story.translations)
+ * @returns {string} - The text to display
+ */
+export function t(original, field, useChinese, story) {
+  const translations = story.translations || {};
+
+  // Detect source language: prefer translations._source, fallback to text heuristics
+  let sourceLang = translations._source;
+  if (!sourceLang && original) {
+    sourceLang = detectTextLang(original);
+  }
+  sourceLang = sourceLang || 'en';
+
+  if (useChinese) {
+    // Want Chinese: if source is Chinese, show original; else show translation
+    return sourceLang === 'zh' ? original : (translations[field] || original);
+  } else {
+    // Want English: if source is English, show original; else show translation
+    return sourceLang === 'en' ? original : (translations[field] || original);
+  }
+}
+
+/**
  * Fields in a story that should be translated.
  */
 const TRANSLATABLE_FIELDS = [

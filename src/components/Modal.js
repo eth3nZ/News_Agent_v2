@@ -1,4 +1,5 @@
 import { escapeHtml, normalizeHttpUrl } from '../utils/helpers.js';
+import { t, detectTextLang } from '../utils/translator.js';
 
 /**
  * Modal component for story detail view.
@@ -28,13 +29,16 @@ export function createModal(story, isPaperMode, onClose, useChinese = false) {
   const prevOverflow = document.body.style.overflow;
   document.body.style.overflow = 'hidden';
 
-  // Close on backdrop click or Escape
+  // Close on backdrop click
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) close();
   });
-  document.addEventListener('keydown', (e) => {
+
+  // Close on Escape key — keep reference for proper cleanup
+  const handleKeydown = (e) => {
     if (e.key === 'Escape') close();
-  });
+  };
+  document.addEventListener('keydown', handleKeydown);
 
   // Open external links
   modal.querySelectorAll('.external-link').forEach(el => {
@@ -48,6 +52,8 @@ export function createModal(story, isPaperMode, onClose, useChinese = false) {
   function close() {
     overlay.classList.remove('animate-fade-in');
     overlay.classList.add('animate-fade-out');
+    // Remove event listener to prevent memory leak
+    document.removeEventListener('keydown', handleKeydown);
     // Restore body scroll
     document.body.style.overflow = prevOverflow;
     setTimeout(() => overlay.remove(), 200);
@@ -62,51 +68,11 @@ async function openExternal(url) {
   if (!url) return;
 
   try {
-    const { open } = await import('@tauri-apps/plugin-shell');
-    await open(url);
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('plugin:shell|open', { path: url });
   } catch (e) {
     console.warn('Tauri shell open failed, using browser fallback:', e);
     window.open(url, '_blank');
-  }
-}
-
-/**
- * Detect whether a text string is Chinese or English.
- * Returns 'zh' if text contains Chinese characters, 'en' otherwise.
- */
-function detectTextLang(text) {
-  return /[\u4e00-\u9fff]/.test(text) ? 'zh' : 'en';
-}
-
-/**
- * Get the right text to display based on current language.
- *
- * Logic:
- * - translations._source tells us what language the original fields are in
- * - If user wants Chinese (`useChinese=true`) and source is Chinese → show original
- * - If user wants Chinese (`useChinese=true`) and source is English → show translation
- * - If user wants English (`useChinese=false`) and source is English → show original
- * - If user wants English (`useChinese=false`) and source is Chinese → show translation
- *
- * When no translations._source exists (no translations at all), the function
- * detects the language of the original text to make the right decision.
- */
-function t(original, field, useChinese, story) {
-  const translations = story.translations || {};
-
-  // Detect source language: prefer translations._source, fallback to text heuristics
-  let sourceLang = translations._source;
-  if (!sourceLang) {
-    sourceLang = detectTextLang(original);
-  }
-  sourceLang = sourceLang || 'en';
-
-  if (useChinese) {
-    // Want Chinese: if source is Chinese, show original; else show translation
-    return sourceLang === 'zh' ? original : (translations[field] || original);
-  } else {
-    // Want English: if source is English, show original; else show translation
-    return sourceLang === 'en' ? original : (translations[field] || original);
   }
 }
 

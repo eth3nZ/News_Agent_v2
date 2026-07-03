@@ -66,8 +66,8 @@ pub async fn baidu_translate(request: TranslateRequest) -> TranslateResponse {
     let digest = hasher.finalize();
     let sign = format!("{:x}", digest);
 
-    // Build query string with URL-encoded `q` (Baidu requires this for non-ASCII)
-    let query_params = format!(
+    // Build POST body as x-www-form-urlencoded (Baidu API requires params in the POST body, not query string)
+    let body = format!(
         "q={}&from={}&to={}&appid={}&salt={}&sign={}",
         urlencode(&q),
         request.from,
@@ -77,17 +77,18 @@ pub async fn baidu_translate(request: TranslateRequest) -> TranslateResponse {
         sign,
     );
 
-    let url = format!("{}{}?{}", endpoint, path, query_params);
+    let url = format!("{}{}", endpoint, path);
 
-    // ureq v3: POST with send_empty() — params passed via query string
+    // ureq v3: POST with body as x-www-form-urlencoded
     match ureq::post(&url)
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .send_empty()
+        .send(body.as_bytes())
     {
         Ok(response) => {
-            let mut body = response.into_body();
-            match body.read_to_string() {
+            let mut resp_body = response.into_body();
+            match resp_body.read_to_string() {
                 Ok(body_str) => {
+                    let body_str: String = body_str;
                     match serde_json::from_str::<BaiduTranslateResult>(&body_str) {
                         Ok(result) => {
                             if let Some(err_code) = result.error_code {

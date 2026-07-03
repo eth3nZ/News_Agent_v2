@@ -10,6 +10,7 @@
 
 const isTauri = typeof window !== 'undefined' && window.__TAURI_INTERNALS__;
 const DEV_SERVER = 'http://localhost:8080';
+const API_PREFIX = '/api/v1';
 
 /* ── Internal helpers ──────────────────────────────────────────────── */
 
@@ -34,10 +35,28 @@ async function apiPost(path, body) {
   return resp.json();
 }
 
+async function apiPut(path, body) {
+  const resp = await fetch(`${DEV_SERVER}${path}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(`PUT ${path}: ${resp.status}`);
+  return resp.json();
+}
+
 async function apiDelete(path) {
   const resp = await fetch(`${DEV_SERVER}${path}`, { method: 'DELETE' });
   if (!resp.ok) throw new Error(`DELETE ${path}: ${resp.status}`);
   return resp.json();
+}
+
+async function withLegacyFallback(primaryCall, legacyCall) {
+  try {
+    return await primaryCall();
+  } catch (err) {
+    return await legacyCall(err);
+  }
 }
 
 /* ── Public API ────────────────────────────────────────────────────── */
@@ -50,7 +69,10 @@ export async function readDataFile(mode) {
     const raw = await tauriInvoke('read_data_file', { mode });
     return JSON.parse(raw);
   }
-  return await apiGet(`/data?mode=${mode}`);
+  return await withLegacyFallback(
+    () => apiGet(`${API_PREFIX}/data/${mode}`),
+    () => apiGet(`/data?mode=${mode}`),
+  );
 }
 
 /**
@@ -61,7 +83,10 @@ export async function writeDataFile(mode, content) {
   if (isTauri) {
     return await tauriInvoke('write_data_file', { mode, content: JSON.stringify(content) });
   }
-  return await apiPost('/data/write', { mode, content });
+  return await withLegacyFallback(
+    () => apiPut(`${API_PREFIX}/data/${mode}`, content),
+    () => apiPost('/data/write', { mode, content }),
+  );
 }
 
 /**
@@ -71,7 +96,11 @@ export async function runPipeline(mode, lang = 'English', apiKey = '', baseUrl =
   if (isTauri) {
     return await tauriInvoke('run_pipeline', { mode, lang, apiKey, baseUrl, model });
   }
-  return await apiPost('/run', { mode, lang, api_key: apiKey, base_url: baseUrl, model });
+  const request = { mode, lang, api_key: apiKey, base_url: baseUrl, model };
+  return await withLegacyFallback(
+    () => apiPost(`${API_PREFIX}/pipeline/run`, request),
+    () => apiPost('/run', request),
+  );
 }
 
 /**
@@ -81,7 +110,11 @@ export async function saveSettings(apiKey, baseUrl, model, syncTime = 0, baiduAp
   if (isTauri) {
     return await tauriInvoke('save_settings', { apiKey, baseUrl, model, syncTime, baiduAppId, baiduSecretKey });
   }
-  return await apiPost('/settings', { api_key: apiKey, base_url: baseUrl, model, sync_time: syncTime, baidu_app_id: baiduAppId, baidu_secret_key: baiduSecretKey });
+  const settings = { api_key: apiKey, base_url: baseUrl, model, sync_time: syncTime, baidu_app_id: baiduAppId, baidu_secret_key: baiduSecretKey };
+  return await withLegacyFallback(
+    () => apiPost(`${API_PREFIX}/settings`, settings),
+    () => apiPost('/settings', settings),
+  );
 }
 
 /**
@@ -91,7 +124,10 @@ export async function loadSettings() {
   if (isTauri) {
     return await tauriInvoke('load_settings');
   }
-  return await apiGet('/settings');
+  return await withLegacyFallback(
+    () => apiGet(`${API_PREFIX}/settings`),
+    () => apiGet('/settings'),
+  );
 }
 
 /**
@@ -101,7 +137,10 @@ export async function listHistoryFiles(mode) {
   if (isTauri) {
     return await tauriInvoke('list_history_files', { mode });
   }
-  return await apiGet(`/history?mode=${mode}`);
+  return await withLegacyFallback(
+    () => apiGet(`${API_PREFIX}/history/${mode}`),
+    () => apiGet(`/history?mode=${mode}`),
+  );
 }
 
 /**
@@ -111,8 +150,11 @@ export async function readDataFileRaw(path) {
   if (isTauri) {
     return await tauriInvoke('read_data_file_raw', { path });
   }
-  const data = await apiGet(`/data/raw?path=${encodeURIComponent(path)}`);
-  const resp = await fetch(`${DEV_SERVER}/data/raw?path=${encodeURIComponent(path)}`);
+  const encodedPath = encodeURIComponent(path);
+  const primaryResp = await fetch(`${DEV_SERVER}${API_PREFIX}/data/raw?path=${encodedPath}`);
+  if (primaryResp.ok) return await primaryResp.text();
+
+  const resp = await fetch(`${DEV_SERVER}/data/raw?path=${encodedPath}`);
   if (!resp.ok) throw new Error(`GET /data/raw: ${resp.status}`);
   return await resp.text();
 }
@@ -124,7 +166,10 @@ export async function clearHistory(mode) {
   if (isTauri) {
     return await tauriInvoke('clear_history_files', { mode });
   }
-  return await apiDelete(`/history?mode=${mode}`);
+  return await withLegacyFallback(
+    () => apiDelete(`${API_PREFIX}/history/${mode}`),
+    () => apiDelete(`/history?mode=${mode}`),
+  );
 }
 
 /**

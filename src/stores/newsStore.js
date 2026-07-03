@@ -4,6 +4,13 @@
  */
 class NewsStore {
   constructor() {
+    // Load persisted bookmarks from localStorage
+    let savedBookmarks = [];
+    try {
+      const raw = localStorage.getItem('news_agent_bookmarks');
+      if (raw) savedBookmarks = JSON.parse(raw);
+    } catch (e) { /* ignore */ }
+
     this._state = {
       mode: 'paper',           // 'paper' | 'industry'
       theme: 'dark',           // 'dark' | 'light'
@@ -21,6 +28,8 @@ class NewsStore {
       syncTime: 0,             // Auto-sync minute of day (0 = manual)
       baiduAppId: '',          // Baidu Translate API app ID
       baiduSecretKey: '',      // Baidu Translate API secret key
+      bookmarkedUrls: savedBookmarks, // Array of bookmarked source_urls
+      showBookmarkedOnly: false,      // Filter to show only bookmarked items
     };
     this._listeners = new Map();
     this._listenerId = 0;
@@ -106,6 +115,43 @@ class NewsStore {
 
   setSyncTime(syncTime) {
     this._update({ syncTime });
+  }
+
+  /**
+   * Toggle bookmark for a story by its source_url.
+   * Persists to localStorage.
+   * @param {string} url - The source_url of the story
+   */
+  toggleBookmark(url) {
+    if (!url) return;
+    const current = [...this._state.bookmarkedUrls];
+    const idx = current.indexOf(url);
+    if (idx === -1) {
+      current.push(url);
+    } else {
+      current.splice(idx, 1);
+    }
+    // Persist to localStorage
+    try {
+      localStorage.setItem('news_agent_bookmarks', JSON.stringify(current));
+    } catch (e) { /* ignore */ }
+    this._update({ bookmarkedUrls: current });
+  }
+
+  /**
+   * Check if a URL is bookmarked.
+   * @param {string} url
+   * @returns {boolean}
+   */
+  isBookmarked(url) {
+    return this._state.bookmarkedUrls.includes(url);
+  }
+
+  /**
+   * Toggle the "show bookmarked only" filter.
+   */
+  toggleShowBookmarkedOnly() {
+    this._update({ showBookmarkedOnly: !this._state.showBookmarkedOnly });
   }
 }
 
