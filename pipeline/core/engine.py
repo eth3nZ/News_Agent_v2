@@ -68,35 +68,48 @@ def load_and_prune_memory(data_file_path: str) -> list[str]:
 
 
 def _filter_validated_stories(mode: BaseMode, stories: list) -> list[dict]:
-    """Apply mode threshold after LLM formatting so weak items cannot leak into output."""
+    """Apply mode threshold after LLM formatting so weak items cannot leak into output.
+
+    For industry mode: uses final_score (three-axis combined) for threshold & sorting,
+    with credibility_score >= 6.0 as a secondary gate. Falls back to credibility_score
+    for paper/other modes.
+    """
     threshold = mode.get_filter_threshold()
     max_stories = mode.get_max_stories()
-    field_name = "credibility_score" if mode.get_name() == "industry" else "score"
 
     kept = []
     dropped = []
     for story in stories:
         story_data = story.model_dump()
         story_data["source_url"] = _normalize_source_url(story_data.get("source_url", ""))
-        score = float(story_data.get(field_name, 0) or 0)
-        is_spam = bool(story_data.get("is_spam", False))
-        if score >= threshold and not is_spam:
-            kept.append(story_data)
+
+        if mode.get_name() == "industry":
+            final_score = float(story_data.get("final_score", 0) or 0)
+            cred_score = float(story_data.get("credibility_score", 0) or 0)
+            is_spam = bool(story_data.get("is_spam", False))
+            if final_score >= threshold and cred_score >= 6.0 and not is_spam:
+                kept.append(story_data)
+            else:
+                dropped.append((story_data.get("title", "Untitled"), final_score, cred_score, is_spam))
         else:
-            dropped.append((story_data.get("title", "Untitled"), score, is_spam))
+            score = float(story_data.get("score", 0) or 0)
+            is_spam = bool(story_data.get("is_spam", False))
+            if score >= threshold and not is_spam:
+                kept.append(story_data)
+            else:
+                dropped.append((story_data.get("title", "Untitled"), score, is_spam))
 
     if dropped:
         print(
             f"🧹 [{mode.get_name()}] Dropped {len(dropped)} stories below threshold "
             f"{threshold:.1f} or flagged spam."
         )
-    kept.sort(
-        key=lambda story: (
-            float(story.get(field_name, 0) or 0),
-            float(story.get("relevance", 0) or 0),
-        ),
-        reverse=True,
-    )
+
+    if mode.get_name() == "industry":
+        kept.sort(key=lambda s: float(s.get("final_score", 0) or 0), reverse=True)
+    else:
+        kept.sort(key=lambda s: float(s.get("score", 0) or 0), reverse=True)
+
     return kept[:max_stories]
 
 

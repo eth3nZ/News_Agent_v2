@@ -1,6 +1,6 @@
 """
-Industry news schema with trust scoring and spam detection fields.
-Designed to filter out clickbait, AI-generated spam, and low-credibility content.
+Industry news schema with three-axis value scoring and credibility analysis.
+Evaluates stories on Technical Significance, Economic/Investment Impact, and Novelty.
 """
 
 from pydantic import BaseModel, Field
@@ -27,74 +27,98 @@ class CredibilitySubScores(BaseModel):
 
 
 class NewsArticle(BaseModel):
-    """A single news article with credibility analysis."""
+    """A single news article with three-axis value scoring and credibility analysis."""
 
     category: str = Field(
         default="industry_update",
         description="Category: 'industry_update', 'product_launch', 'opinion_piece', 'regulatory', 'sponsored'."
     )
+
+    # ── Three-Axis Value Scores ──
+    technical_score: float = Field(
+        default=0.0,
+        description="Technical significance 0-10: architecture changes, benchmarks, model releases, algorithms."
+    )
+    economic_score: float = Field(
+        default=0.0,
+        description="Economic / investment impact 0-10: market moves, supply chain, funding, regulation."
+    )
+    novelty_score: float = Field(
+        default=0.0,
+        description="Information novelty 0-10: breaking news, exclusive data, fresh analysis."
+    )
+
+    # ── Combined Score (computed: technical*0.3 + economic*0.4 + novelty*0.3) ──
+    final_score: float = Field(
+        default=0.0,
+        description="Combined score = technical*0.3 + economic*0.4 + novelty*0.3. Used for ranking and threshold gate."
+    )
+
+    # ── Credibility ──
     credibility_score: float = Field(
-        description="Overall credibility rating from 0.0 to 10.0."
+        default=0.0,
+        description="Overall credibility rating from 0.0 to 10.0 (average of sub_scores)."
     )
     sub_scores: CredibilitySubScores = Field(
         default_factory=CredibilitySubScores,
         description="Breakdown across source quality, writing, attribution, and factual consistency."
     )
-    relevance: float = Field(
-        default=5.0,
-        description="How relevant is this to current industry trends? 0-10."
-    )
+
+    # ── Spam detection ──
     is_spam: bool = Field(
         default=False,
         description="Flagged as likely spam, clickbait, or AI-generated fluff."
     )
     spam_flags: list[str] = Field(
         default_factory=list,
-        description="List of specific spam signals detected (e.g., 'clickbait_headline', 'no_sources', 'ai_generated_pattern', 'promotional_language')."
+        description="List of specific spam signals detected."
     )
+
+    # ── Article metadata ──
     title: str = Field(
-        description="The clear, original title of the article."
+        description="Localized display title in the requested output language."
     )
     source_name: str = Field(
         default="Unknown",
-        description="Name of the source/publisher, e.g., 'TechCrunch', 'Ars Technica'."
+        description="Name of the source/publisher."
     )
     source_url: str = Field(
-        description="Original URL of the article."
+        default="",
+        description="Original URL of the article (http/https)."
     )
     date: str = Field(
-        default="xxxx-xx-xx",
-        description="Date the article was published."
+        default="",
+        description="Date the article was published (YYYY-MM-DD)."
     )
 
-    # --- Summary variants ---
+    # ── Summary variants ──
     summary: str = Field(
         default="",
-        description="3-4 sentence executive summary. Objective, factual tone."
+        description="2-3 sentence executive summary. Objective, factual tone."
     )
     takeaway: str = Field(
         default="",
         description="One-sentence bottom-line takeaway for busy readers."
     )
 
-    # --- Deep content ---
+    # ── Deep content ──
     content: str = Field(
         default="",
         description="Detailed analysis with sections: Key Facts, Context/Background, Why This Matters, Caveats/Limitations."
     )
 
-    # --- Trust report ---
+    # ── Trust report ──
     trust_report: str = Field(
         default="",
-        description="Brief explanation of the credibility score — what evidence or warning signs were found."
+        description="Brief explanation of the credibility assessment."
     )
 
 
 class NewsBriefing(BaseModel):
     """Top-level output for industry news mode."""
     summary_counts: str = Field(
-        description="Ex: '5 verified industry stories, 2 flagged as low-credibility.'"
+        description="Ex: '8 high-value stories selected from 120 candidates.'"
     )
     top_stories: list[NewsArticle] = Field(
-        description="List of top verified and filtered news stories."
+        description="List of top stories sorted by final_score descending."
     )

@@ -15,7 +15,7 @@ class IndustryMode(BaseMode):
 
     def get_sources(self) -> list[dict[str, str]]:
         return [
-            # ── Domestic sources (accessible from China, produce data reliably) ──
+            # ── Domestic sources (accessible from China) ──
             {
                 "name": "36氪",
                 "url": "https://36kr.com/feed",
@@ -37,7 +37,7 @@ class IndustryMode(BaseMode):
                 "group": "domestic",
                 "max_items": 40
             },
-            # ── Foreign sources (may be unreachable from China, fast-fail expected) ──
+            # ── Foreign sources ──
             {
                 "name": "TechCrunch",
                 "url": "https://techcrunch.com/feed/",
@@ -118,44 +118,54 @@ class IndustryMode(BaseMode):
 
     def get_scraper_junk_keywords(self) -> list[str]:
         return [
-            "funding", "seed round", "series a", "ventures",
-            "acquired", "appoints", "hiring", "shares slip",
-            "ipo", "stock", "dividend", "merger",
-            "press release", "sponsored", "partner post",
-            "earnings call", "subscribe", "newsletter",
             "police", "stolen", "theft", "crime", "arrest",
-            "warrant", "geofence", "supreme court", "burglary",
-            "stole", "thief", "robbery", "criminal",
+            "warrant", "burglary", "stole", "thief", "robbery", "criminal",
             "election", "campaign", "voter", "vote",
             "senate", "congress", "president",
-            "solar", "renewable", "rocket launch", "space station",
-            "movie", "celebrity", "sports", "gaming review"
+            "movie", "celebrity", "sports", "gaming review",
+            "subscribe", "newsletter",
         ]
 
     def get_scraper_required_keywords(self) -> list[str]:
+        """Broad tech/biz keyword filter — lets LLM do the heavy lifting on relevance."""
         return [
+            # AI / ML
             "ai", "artificial intelligence", "machine learning", "deep learning",
             "llm", "large language model", "model", "agent", "codex", "copilot",
-            "openai", "anthropic", "claude", "google deepmind", "gemini",
-            "microsoft", "meta ai", "llama", "mistral", "xai", "grok",
+            "openai", "anthropic", "claude", "google", "gemini",
+            "microsoft", "meta", "llama", "mistral", "xai", "grok",
+            # Hardware
             "nvidia", "gpu", "cuda", "datacenter", "data center",
             "semiconductor", "chip", "chips", "processor", "accelerator",
             "cloud", "aws", "azure", "inference", "training",
-            "developer tool", "coding assistant", "hardware", "device",
-            "macro pad", "keyboard", "work louder",
             "robot", "robotics", "autonomous", "self-driving",
+            # Chinese tech
             "人工智能", "大模型", "模型", "智能体", "机器学习", "深度学习",
             "算力", "芯片", "半导体", "英伟达", "微软", "谷歌", "苹果",
-            "openai", "codex", "开发者工具", "编程助手", "硬件", "设备",
+            "开发者工具", "编程助手", "硬件", "设备",
             "阿里", "腾讯", "百度", "华为", "字节", "智谱", "月之暗面",
-            "机器人", "自动驾驶", "云计算"
+            "机器人", "自动驾驶", "云计算",
+            # 🔥 Broad tech / economy signals
+            "breakthrough", "state-of-the-art", "sota", "frontier",
+            "innovation", "milestone", "architecture",
+            "market", "valuation", "revenue", "profit",
+            "stock", "investor", "investment", "funding round",
+            "ipo", "acquisition", "merger",
+            "supply chain", "tariff", "trade war", "regulation",
+            "antitrust", "competition",
+            "tech", "technology", "platform", "ecosystem",
+            "startup", "unicorn",
+            "突破", "新架构", "里程碑", "创新",
+            "市场", "市值", "投资", "融资", "上市",
+            "供应链", "关税", "贸易战", "监管",
+            "竞争", "垄断", "反垄断",
         ]
 
     def get_scraper_recent_days(self) -> int | None:
         return 4
 
     def get_scraper_max_entries_per_source(self) -> int | None:
-        return 10
+        return 15
 
     def get_sort_options(self) -> list[str]:
         return [
