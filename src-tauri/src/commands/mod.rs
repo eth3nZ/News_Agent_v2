@@ -3,3 +3,6 @@ pub mod run_pipeline;
 pub mod list_history;
 pub mod clear_history;
 pub mod settings;
+pub mod quit_app;
+pub mod write_data;
+pub mod translate;

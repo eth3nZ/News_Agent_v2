@@ -13,11 +13,14 @@ class NewsStore {
       sortKey: 'Score ↓',     // Current sort
       lang: 'English',         // Output language for LLM generation
       viewingHistory: false,   // Viewing a history snapshot
+      phase: 0,                // Pipeline phase during sync: 0=idle, 1,2,3
       historyEntries: [],      // Available history snapshots
       apiKey: '',              // LLM API key
       baseUrl: 'https://api.ds.com', // LLM API base URL
-      model: 'glm-5.2',    // LLM model name
+      model: '',               // LLM model name
       syncTime: 0,             // Auto-sync minute of day (0 = manual)
+      baiduAppId: '',          // Baidu Translate API app ID
+      baiduSecretKey: '',      // Baidu Translate API secret key
     };
     this._listeners = new Map();
     this._listenerId = 0;
@@ -43,7 +46,7 @@ class NewsStore {
   }
 
   setMode(mode) {
-    this._update({ mode, data: null, error: null, viewingHistory: false });
+    this._update({ mode, data: null, error: null, viewingHistory: false, phase: 0 });
   }
 
   setTheme(theme) {
@@ -65,15 +68,21 @@ class NewsStore {
   }
 
   setLoading(loading) {
-    this._update({ loading });
+    this._update({ loading, ...(loading ? { phase: 0 } : {}) });
   }
 
   setError(error) {
-    this._update({ error, loading: false });
+    this._update({ error, loading: false, phase: 0 });
   }
 
   setData(data) {
-    this._update({ data, error: null, loading: false });
+    this._update({ data, error: null, loading: false, phase: 0 });
+  }
+
+  setPhase(phase) {
+    if (phase > this._state.phase) {
+      this._update({ phase });
+    }
   }
 
   setViewingHistory(viewing) {
@@ -84,12 +93,14 @@ class NewsStore {
     this._update({ historyEntries: entries });
   }
 
-  setSettings(apiKey, baseUrl, model, syncTime) {
+  setSettings(apiKey, baseUrl, model, syncTime, baiduAppId, baiduSecretKey) {
     this._update({
       apiKey,
       baseUrl,
       model,
       ...(syncTime !== undefined ? { syncTime } : {}),
+      ...(baiduAppId !== undefined ? { baiduAppId } : {}),
+      ...(baiduSecretKey !== undefined ? { baiduSecretKey } : {}),
     });
   }
 

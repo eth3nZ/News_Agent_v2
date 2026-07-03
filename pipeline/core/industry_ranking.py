@@ -81,25 +81,42 @@ def _score_industry_candidate(entry: str) -> int:
 
 
 def _select_industry_entries(entries: list[tuple[str, str, str]]) -> list[str]:
-    """Select balanced industry candidates so that ~70% are foreign and ~30% domestic."""
+    """Select balanced industry candidates so that ~70% are foreign and ~30% domestic.
+
+    The total candidate pool fed to the LLM is now dynamic:
+      - At minimum: all entries from the group with fewer items → ~50% split
+      - At maximum: up to MAX_ENTRIES total (75), respecting the 70/30 split
+      - No hardcoded count assumptions — adapts to what sources actually returned.
+    """
+    MAX_ENTRIES = 75
     selected: list[tuple[str, str, str]] = []
 
-    # Target counts: ~70% foreign, ~30% domestic
-    # Total entries fed to LLM ~ 35; foreign ~24, domestic ~11
-    for target_group, target_count in (("foreign", 24), ("domestic", 11)):
-        grouped: dict[str, list[tuple[str, str, str]]] = {}
-        for group, source_name, entry in entries:
-            if group == target_group:
-                grouped.setdefault(source_name, []).append((group, source_name, entry))
+    # Separate entries by group
+    grouped: dict[str, dict[str, list[tuple[str, str, str]]]] = {"foreign": {}, "domestic": {}}
+    for group, source_name, entry in entries:
+        if group in grouped:
+            grouped[group].setdefault(source_name, []).append((group, source_name, entry))
 
-        for source_entries in grouped.values():
+    # Sort each source's entries by score descending
+    for group_sources in grouped.values():
+        for source_entries in group_sources.values():
             source_entries.sort(key=lambda item: _score_industry_candidate(item[2]), reverse=True)
 
-        source_names = list(grouped.keys())
+    # Determine group counts based on available data (max 75 total, 70/30 split)
+    total_foreign = sum(len(v) for v in grouped["foreign"].values())
+    total_domestic = sum(len(v) for v in grouped["domestic"].values())
+
+    # Calculate target: at most MAX_ENTRIES total, respecting 70/30 split
+    target_foreign = min(total_foreign, round(MAX_ENTRIES * 0.7))
+    target_domestic = min(total_domestic, round(MAX_ENTRIES * 0.3))
+
+    # Round-robin selection from each group
+    for target_group, target_count in (("foreign", target_foreign), ("domestic", target_domestic)):
+        source_names = list(grouped[target_group].keys())
         while len([item for item in selected if item[0] == target_group]) < target_count:
             added_this_round = False
             for source_name in source_names:
-                source_entries = grouped[source_name]
+                source_entries = grouped[target_group][source_name]
                 if not source_entries:
                     continue
                 selected.append(source_entries.pop(0))
@@ -109,6 +126,7 @@ def _select_industry_entries(entries: list[tuple[str, str, str]]) -> list[str]:
             if not added_this_round:
                 break
 
+    # Any remaining entries from ungrouped sources
     other = [
         item for item in entries
         if item[0] not in {"foreign", "domestic"}
@@ -117,4 +135,10 @@ def _select_industry_entries(entries: list[tuple[str, str, str]]) -> list[str]:
     selected.extend(other[:5])
 
     selected.sort(key=lambda item: _score_industry_candidate(item[2]), reverse=True)
+
+    total = len(selected)
+    foreign_count = sum(1 for g, _, _ in selected if g == "foreign")
+    domestic_count = sum(1 for g, _, _ in selected if g == "domestic")
+    print(f"  📊 Feeding LLM {total} entries ({foreign_count} foreign, {domestic_count} domestic)")
+
     return [entry for _, _, entry in selected]

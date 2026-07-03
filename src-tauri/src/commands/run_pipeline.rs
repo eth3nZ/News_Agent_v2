@@ -1,12 +1,21 @@
 use std::path::PathBuf;
-use std::process::{Command as SyncCommand, Stdio};
-use std::thread;
+use std::process::Stdio;
 use std::time::{Duration, Instant};
-use tauri::command;
+use tauri::{command, AppHandle, Emitter};
 use serde::{Deserialize, Serialize};
-use tokio::task::spawn_blocking;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command as TokioCommand;
+use tokio::time::sleep;
 
 const PIPELINE_TIMEOUT_SECONDS: u64 = 300;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PipelineProgress {
+    pub mode: String,
+    pub line: String,
+    /// Phase number (1-based). 0 means this line is just a progress detail, not a phase transition.
+    pub phase: u8,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PipelineResult {
@@ -17,7 +26,14 @@ pub struct PipelineResult {
 }
 
 #[command]
-pub async fn run_pipeline(mode: String, lang: String, api_key: String, base_url: String, model: String) -> Result<PipelineResult, String> {
+pub async fn run_pipeline(
+    app_handle: AppHandle,
+    mode: String,
+    lang: String,
+    api_key: String,
+    base_url: String,
+    model: String,
+) -> Result<PipelineResult, String> {
     let project_root = get_project_root();
     let pipeline_dir = project_root.join("pipeline");
     let main_script = pipeline_dir.join("main.py");
@@ -28,83 +44,147 @@ pub async fn run_pipeline(mode: String, lang: String, api_key: String, base_url:
 
     let python_cmd = find_python();
 
-    // Run the blocking Python process on a separate thread so the UI stays responsive
-    let inner: Result<PipelineResult, String> = spawn_blocking(move || -> Result<PipelineResult, String> {
-        let mut cmd = SyncCommand::new(&python_cmd);
-        cmd.arg(&main_script)
-            .arg("--mode")
-            .arg(&mode)
-            .arg("--lang")
-            .arg(&lang)
-            .arg("--api-key")
-            .arg(&api_key)
-            .arg("--base-url")
-            .arg(&base_url)
-            .arg("--model")
-            .arg(&model)
-            .current_dir(&project_root)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+    let mut child = TokioCommand::new(&python_cmd)
+        .arg(&main_script)
+        .arg("--mode")
+        .arg(&mode)
+        .arg("--lang")
+        .arg(&lang)
+        .arg("--api-key")
+        .arg(&api_key)
+        .arg("--base-url")
+        .arg(&base_url)
+        .arg("--model")
+        .arg(&model)
+        .current_dir(&project_root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| format!("Failed to execute pipeline: {}", e))?;
 
-        let mut child = cmd
-            .spawn()
-            .map_err(|e| format!("Failed to execute pipeline: {}", e))?;
+    let stdout = child.stdout.take()
+        .ok_or_else(|| "Failed to capture stdout".to_string())?;
+    let stderr = child.stderr.take()
+        .ok_or_else(|| "Failed to capture stderr".to_string())?;
 
-        let deadline = Instant::now() + Duration::from_secs(PIPELINE_TIMEOUT_SECONDS);
-        let status = loop {
-            match child.try_wait() {
-                Ok(Some(status)) => break status,
-                Ok(None) => {
-                    if Instant::now() >= deadline {
-                        let _ = child.kill();
-                        let output = child
-                            .wait_with_output()
-                            .map_err(|e| format!("Pipeline timed out and failed to collect output: {}", e))?;
-                        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                        return Ok(PipelineResult {
-                            success: false,
-                            message: format!(
-                                "Pipeline timed out after {} seconds for mode '{}'",
-                                PIPELINE_TIMEOUT_SECONDS, mode
-                            ),
-                            stdout,
-                            stderr,
-                        });
-                    }
-                    thread::sleep(Duration::from_millis(500));
-                }
-                Err(e) => return Err(format!("Failed while waiting for pipeline: {}", e)),
-            }
-        };
+    let mode_clone = mode.clone();
+    let app_handle_clone = app_handle.clone();
 
-        let output = child
-            .wait_with_output()
-            .map_err(|e| format!("Failed to collect pipeline output: {}", e))?;
+    // Read stdout line by line and emit events
+    let stdout_handle = tokio::spawn(async move {
+        let reader = BufReader::new(stdout);
+        let mut lines = reader.lines();
+        let mut collected = String::new();
 
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        while let Ok(Some(line)) = lines.next_line().await {
+            collected.push_str(&line);
+            collected.push('\n');
 
-        if status.success() {
-            Ok(PipelineResult {
-                success: true,
-                message: format!("Pipeline completed for mode '{}' with lang '{}'", mode, lang),
-                stdout,
-                stderr,
-            })
-        } else {
-            Ok(PipelineResult {
-                success: false,
-                message: format!("Pipeline failed for mode '{}' with lang '{}'", mode, lang),
-                stdout,
-                stderr,
-            })
+            // Determine phase from the line content
+            let phase = detect_phase(&line);
+
+            // Emit progress event to frontend
+            let _ = app_handle_clone.emit("pipeline-progress", PipelineProgress {
+                mode: mode_clone.clone(),
+                line: line.clone(),
+                phase,
+            });
         }
-    })
-    .await
-    .map_err(|e| format!("Task join error: {}", e))?;
 
-    inner
+        collected
+    });
+
+    // Read stderr (only collected, not streamed)
+    let stderr_handle = tokio::spawn(async move {
+        let reader = BufReader::new(stderr);
+        let mut lines = reader.lines();
+        let mut collected = String::new();
+
+        while let Ok(Some(line)) = lines.next_line().await {
+            collected.push_str(&line);
+            collected.push('\n');
+        }
+
+        collected
+    });
+
+    // Wait for process with timeout
+    let deadline = Instant::now() + Duration::from_secs(PIPELINE_TIMEOUT_SECONDS);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = app_handle.emit("pipeline-progress", PipelineProgress {
+                        mode: mode.clone(),
+                        line: format!("❌ Pipeline timed out after {} seconds", PIPELINE_TIMEOUT_SECONDS),
+                        phase: 0,
+                    });
+                    // Await handles to collect partial output
+                    let (partial_stdout, partial_stderr) = tokio::join!(stdout_handle, stderr_handle);
+                    return Ok(PipelineResult {
+                        success: false,
+                        message: format!(
+                            "Pipeline timed out after {} seconds for mode '{}'",
+                            PIPELINE_TIMEOUT_SECONDS, mode
+                        ),
+                        stdout: partial_stdout.unwrap_or_default(),
+                        stderr: partial_stderr.unwrap_or_default(),
+                    });
+                }
+                sleep(Duration::from_millis(200)).await;
+            }
+            Err(e) => return Err(format!("Failed while waiting for pipeline: {}", e)),
+        }
+    };
+
+    // Collect remaining output
+    let (full_stdout, full_stderr) = tokio::join!(stdout_handle, stderr_handle);
+    let stdout = full_stdout.unwrap_or_default();
+    let stderr = full_stderr.unwrap_or_default();
+
+    if status.success() {
+        // Emit completion
+        let _ = app_handle.emit("pipeline-progress", PipelineProgress {
+            mode: mode.clone(),
+            line: format!("✅ Pipeline completed for mode '{}' with lang '{}'", mode, lang),
+            phase: 3, // final phase
+        });
+
+        Ok(PipelineResult {
+            success: true,
+            message: format!("Pipeline completed for mode '{}' with lang '{}'", mode, lang),
+            stdout,
+            stderr,
+        })
+    } else {
+        Ok(PipelineResult {
+            success: false,
+            message: format!("Pipeline failed for mode '{}' with lang '{}'", mode, lang),
+            stdout,
+            stderr,
+        })
+    }
+}
+
+/// Detect the pipeline phase from a stdout line.
+/// - "Scraping sources..." → phase 1
+/// - "Running LLM pipeline..." → phase 2
+/// - "Archived to history" → phase 3
+/// - Anything else → phase 0 (detail line, not a phase boundary)
+fn detect_phase(line: &str) -> u8 {
+    let trimmed = line.trim();
+    if trimmed.contains("Scraping sources") || trimmed.contains("scraping sources") {
+        1
+    } else if trimmed.contains("Running LLM pipeline") || trimmed.contains("running LLM pipeline") {
+        2
+    } else if trimmed.contains("Archived to history") || trimmed.contains("archived to history") {
+        3
+    } else {
+        0
+    }
 }
 
 fn get_project_root() -> PathBuf {
@@ -117,7 +197,7 @@ fn get_project_root() -> PathBuf {
 
 fn find_python() -> String {
     for cmd in &["python3", "python"] {
-        if SyncCommand::new(cmd).arg("--version").output().is_ok() {
+        if std::process::Command::new(cmd).arg("--version").output().is_ok() {
             return cmd.to_string();
         }
     }

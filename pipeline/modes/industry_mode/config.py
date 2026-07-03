@@ -21,21 +21,21 @@ class IndustryMode(BaseMode):
                 "url": "https://36kr.com/feed",
                 "type": "rss",
                 "group": "domestic",
-                "max_items": 25
+                "max_items": 40
             },
             {
                 "name": "量子位",
                 "url": "https://www.qbitai.com/feed",
                 "type": "rss",
                 "group": "domestic",
-                "max_items": 25
+                "max_items": 40
             },
             {
                 "name": "IT之家",
                 "url": "https://www.ithome.com/rss/",
                 "type": "rss",
                 "group": "domestic",
-                "max_items": 25
+                "max_items": 40
             },
             # ── Foreign sources (may be unreachable from China, fast-fail expected) ──
             {
@@ -43,7 +43,7 @@ class IndustryMode(BaseMode):
                 "url": "https://techcrunch.com/feed/",
                 "type": "rss",
                 "group": "foreign",
-                "max_items": 20,
+                "max_items": 30,
                 "timeout": 5
             },
             {
@@ -51,7 +51,7 @@ class IndustryMode(BaseMode):
                 "url": "https://feeds.arstechnica.com/arstechnica/index",
                 "type": "rss",
                 "group": "foreign",
-                "max_items": 20,
+                "max_items": 30,
                 "timeout": 5
             },
             {
@@ -59,7 +59,7 @@ class IndustryMode(BaseMode):
                 "url": "https://news.ycombinator.com/rss",
                 "type": "rss",
                 "group": "foreign",
-                "max_items": 20,
+                "max_items": 30,
                 "timeout": 5,
                 "fallback_urls": [
                     "https://hnrss.org/frontpage"
@@ -70,7 +70,7 @@ class IndustryMode(BaseMode):
                 "url": "https://www.theverge.com/rss/index.xml",
                 "type": "rss",
                 "group": "foreign",
-                "max_items": 20,
+                "max_items": 30,
                 "timeout": 5
             },
             {
@@ -78,7 +78,7 @@ class IndustryMode(BaseMode):
                 "url": "https://www.wired.com/feed/rss",
                 "type": "rss",
                 "group": "foreign",
-                "max_items": 20,
+                "max_items": 30,
                 "timeout": 5
             }
         ]
@@ -87,7 +87,7 @@ class IndustryMode(BaseMode):
         return 7.0
 
     def get_max_stories(self) -> int:
-        return 10
+        return 15
 
     def get_schema_class(self):
         return NewsBriefing

@@ -155,3 +155,23 @@ export function updateSortOptions(options, theme = 'dark', currentSortKey) {
     }
   }
 }
+
+/**
+ * ToolbarComponent — wraps createToolbar + updateSortOptions
+ * into a unified class interface for consistency with other components.
+ */
+export class ToolbarComponent {
+  constructor(container, store, callbacks) {
+    this.element = createToolbar(container, store, callbacks.onSync, callbacks.onHistory, callbacks.onBack, callbacks.onSettings);
+    this.store = store;
+  }
+
+  update(state) {
+    // updateSortOptions is called externally when mode changes
+    // Theme changes are handled by the subscription inside createToolbar
+    const backBtn = document.getElementById('btn-back');
+    if (backBtn) {
+      backBtn.classList.toggle('hidden', !state.viewingHistory);
+    }
+  }
+}

@@ -1,2 +1,7 @@
+# ── Production dependencies (needed by end-users) ──
 pydantic>=2.0.0
 openai>=1.0.0
+
+# ── Development dependencies (needed by developers only) ──
+# Dev HTTP server for browser-only mode (pip install fastapi uvicorn)
+# Testing (pip install pytest pytest-mock)

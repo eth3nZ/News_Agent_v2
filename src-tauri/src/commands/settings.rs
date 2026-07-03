@@ -17,6 +17,12 @@ pub struct AppSettings {
     /// Positive values enable automatic pipeline sync at a fixed local clock time.
     #[serde(rename = "syncTime", default = "default_sync_time")]
     pub sync_time: u32,
+    /// Baidu Translate API app ID (optional, for Chinese translation).
+    #[serde(rename = "baiduAppId", default)]
+    pub baidu_app_id: String,
+    /// Baidu Translate API secret key (optional, for Chinese translation).
+    #[serde(rename = "baiduSecretKey", default)]
+    pub baidu_secret_key: String,
 }
 
 fn default_sync_time() -> u32 {
@@ -38,6 +44,8 @@ pub async fn save_settings(
     base_url: String,
     model: String,
     sync_time: u32,
+    baidu_app_id: String,
+    baidu_secret_key: String,
 ) -> Result<(), String> {
     let path = get_settings_path();
     let settings = AppSettings {
@@ -45,6 +53,8 @@ pub async fn save_settings(
         base_url,
         model,
         sync_time,
+        baidu_app_id,
+        baidu_secret_key,
     };
 
     // Ensure parent directory exists
@@ -71,8 +81,10 @@ pub async fn load_settings() -> Result<AppSettings, String> {
         return Ok(AppSettings {
             api_key: String::new(),
             base_url: "https://api.ds.com".to_string(),
-            model: "deepseek-v4-flash".to_string(),
+            model: "ds-v4-flash".to_string(),
             sync_time: 0,
+            baidu_app_id: String::new(),
+            baidu_secret_key: String::new(),
         });
     }
 

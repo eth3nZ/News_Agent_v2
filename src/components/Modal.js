@@ -1,10 +1,13 @@
+import { escapeHtml, normalizeHttpUrl } from '../utils/helpers.js';
+
 /**
  * Modal component for story detail view.
  * @param {object} story - Story data object
  * @param {boolean} isPaperMode - Whether in paper mode
  * @param {Function} onClose - Close callback
+ * @param {boolean} useChinese - Whether to show Chinese translations if available
  */
-export function createModal(story, isPaperMode, onClose) {
+export function createModal(story, isPaperMode, onClose, useChinese = false) {
   const overlay = document.createElement('div');
   overlay.className = 'fixed inset-0 bg-black/60 modal-backdrop flex items-center justify-center z-50 animate-fade-in';
   overlay.id = 'modal-overlay';
@@ -13,9 +16,9 @@ export function createModal(story, isPaperMode, onClose) {
   modal.className = 'bg-white dark:bg-surface-modal rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto mx-4 shadow-2xl animate-slide-up';
 
   if (isPaperMode) {
-    modal.innerHTML = buildPaperModal(story);
+    modal.innerHTML = buildPaperModal(story, useChinese);
   } else {
-    modal.innerHTML = buildNewsModal(story);
+    modal.innerHTML = buildNewsModal(story, useChinese);
   }
 
   overlay.appendChild(modal);
@@ -67,19 +70,60 @@ async function openExternal(url) {
   }
 }
 
-function buildPaperModal(story) {
+/**
+ * Detect whether a text string is Chinese or English.
+ * Returns 'zh' if text contains Chinese characters, 'en' otherwise.
+ */
+function detectTextLang(text) {
+  return /[\u4e00-\u9fff]/.test(text) ? 'zh' : 'en';
+}
+
+/**
+ * Get the right text to display based on current language.
+ *
+ * Logic:
+ * - translations._source tells us what language the original fields are in
+ * - If user wants Chinese (`useChinese=true`) and source is Chinese → show original
+ * - If user wants Chinese (`useChinese=true`) and source is English → show translation
+ * - If user wants English (`useChinese=false`) and source is English → show original
+ * - If user wants English (`useChinese=false`) and source is Chinese → show translation
+ *
+ * When no translations._source exists (no translations at all), the function
+ * detects the language of the original text to make the right decision.
+ */
+function t(original, field, useChinese, story) {
+  const translations = story.translations || {};
+
+  // Detect source language: prefer translations._source, fallback to text heuristics
+  let sourceLang = translations._source;
+  if (!sourceLang) {
+    sourceLang = detectTextLang(original);
+  }
+  sourceLang = sourceLang || 'en';
+
+  if (useChinese) {
+    // Want Chinese: if source is Chinese, show original; else show translation
+    return sourceLang === 'zh' ? original : (translations[field] || original);
+  } else {
+    // Want English: if source is English, show original; else show translation
+    return sourceLang === 'en' ? original : (translations[field] || original);
+  }
+}
+
+function buildPaperModal(story, useChinese) {
   const url = normalizeHttpUrl(story.source_url || '');
   const sub = story.sub_scores || {};
-  const tldr = story.tl_dr || '';
-  const lay = story.lay_summary || '';
-  const tech = story.technical_summary || '';
+  const tldr = t(story.tl_dr || '', 'tl_dr', useChinese, story);
+  const lay = t(story.lay_summary || '', 'lay_summary', useChinese, story);
+  const tech = t(story.technical_summary || '', 'technical_summary', useChinese, story);
   const terms = story.key_terms || [];
   const gaps = story.knowledge_gaps || [];
-  const impact = story.real_world_impact || '';
-  const content = story.content || '';
+  const impact = t(story.real_world_impact || '', 'real_world_impact', useChinese, story);
+  const content = t(story.content || '', 'content', useChinese, story);
   const dateStr = story.date || '';
   const score = story.score || 0;
   const difficulty = story.difficulty || 5;
+  const title = t(story.title || '', 'title', useChinese, story);
 
   return `
     <div class="p-6">
@@ -90,7 +134,7 @@ function buildPaperModal(story) {
         </div>
       ` : ''}
 
-      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-3 leading-snug">${escapeHtml(story.title || '')}</h2>
+      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-3 leading-snug">${escapeHtml(title)}</h2>
 
       <div class="flex items-center gap-4 text-sm mb-4 flex-wrap">
         <span class="font-bold text-gray-900 dark:text-amber-400">Score: ${score.toFixed(1)}/10</span>
@@ -163,7 +207,7 @@ function buildPaperModal(story) {
   `;
 }
 
-function buildNewsModal(story) {
+function buildNewsModal(story, useChinese) {
   const url = normalizeHttpUrl(story.source_url || '');
   const sub = story.sub_scores || {};
   const cred = story.credibility_score || 0;
@@ -171,11 +215,12 @@ function buildNewsModal(story) {
   const sourceName = story.source_name || 'Unknown';
   const isSpam = story.is_spam || false;
   const spamFlags = story.spam_flags || [];
-  const trustReport = story.trust_report || '';
-  const takeaway = story.takeaway || '';
-  const summary = story.summary || '';
-  const content = story.content || '';
+  const trustReport = t(story.trust_report || '', 'trust_report', useChinese, story);
+  const takeaway = t(story.takeaway || '', 'takeaway', useChinese, story);
+  const summary = t(story.summary || '', 'summary', useChinese, story);
+  const content = t(story.content || '', 'content', useChinese, story);
   const dateStr = story.date || '';
+  const title = t(story.title || '', 'title', useChinese, story);
   const credColor = cred >= 7 ? '#22c55e' : cred >= 5 ? '#f59e0b' : '#ef4444';
   const badgeColors = {
     industry_update: '#059669', product_launch: '#3B82F6',
@@ -191,7 +236,7 @@ function buildNewsModal(story) {
         </div>
       ` : ''}
 
-      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-3 leading-snug">${escapeHtml(story.title || '')}</h2>
+      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-3 leading-snug">${escapeHtml(title)}</h2>
 
       <div class="flex items-center gap-4 text-sm mb-4 flex-wrap">
         <span class="font-bold" style="color:${credColor}">Trust Score: ${cred.toFixed(1)}/10</span>
@@ -312,22 +357,4 @@ function renderSectionLine(headerText, restText) {
       <p class="text-sm text-gray-700 dark:text-zinc-300 leading-relaxed">${rest}</p>
     </section>
   `;
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function normalizeHttpUrl(url) {
-  if (!url) return '';
-  const value = String(url).trim();
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? value : '';
-  } catch {
-    return '';
-  }
 }

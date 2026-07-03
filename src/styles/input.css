@@ -76,3 +76,22 @@
   background: linear-gradient(90deg, #1a1a1e 25%, #27272a 50%, #1a1a1e 75%);
   background-size: 200% 100%;
 }
+/* Toast slide-in animation */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+/* Fade-in animation (reusable for overlays/modals) */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}

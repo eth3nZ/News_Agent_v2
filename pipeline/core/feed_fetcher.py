@@ -16,10 +16,10 @@ from urllib.parse import urlparse
 
 
 DEFAULT_TIMEOUT = 5
-MAX_RETRIES = 0
+MAX_RETRIES = 2
 RETRY_DELAY = 1.0
 RATE_LIMIT_BASE_WAIT = 60.0
-RATE_LIMIT_MAX_RETRIES = 0
+RATE_LIMIT_MAX_RETRIES = 1
 
 _PERMISSIVE_SSL_CONTEXT = ssl.create_default_context()
 _PERMISSIVE_SSL_CONTEXT.check_hostname = False

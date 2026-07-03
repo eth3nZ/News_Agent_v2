@@ -41,3 +41,30 @@ export function updateSubtitle(text) {
   const el = document.getElementById('header-subtitle');
   if (el) el.textContent = text;
 }
+
+/**
+ * HeaderComponent — wraps createHeader + updateStatus + updateSubtitle
+ * into a unified class interface for consistency with other components.
+ */
+export class HeaderComponent {
+  constructor(container, store) {
+    this.element = createHeader(container, store);
+    this.statusDot = this.element.querySelector('#status-dot');
+  }
+
+  update(state) {
+    const isDark = state.theme === 'dark';
+    this.element.className = isDark
+      ? 'bg-surface-card px-6 py-3 flex items-center justify-between border-b border-zinc-800'
+      : 'bg-white px-6 py-3 flex items-center justify-between border-b border-zinc-200';
+    this.element.querySelector('h1').className = isDark ? 'text-lg font-bold text-white' : 'text-lg font-bold text-zinc-900';
+    this.element.querySelector('#header-subtitle').className = isDark ? 'text-xs text-zinc-400' : 'text-xs text-zinc-500';
+
+    if (state.status) {
+      updateStatus(this.statusDot, state.status);
+    }
+    if (state.subtitle) {
+      updateSubtitle(state.subtitle);
+    }
+  }
+}

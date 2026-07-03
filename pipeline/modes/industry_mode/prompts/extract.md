@@ -32,14 +32,14 @@ Do NOT include generic consumer tech, car, privacy, legal, cloud, or datacenter-
 # 4. Quality Gate — STRICT
 - Include only stories with final `credibility_score >= 7.0`.
 - Do NOT include 4/5/6-rated stories, opinion-only pieces, generic trend essays, or weakly sourced blog posts to fill the list.
-- If fewer than 10 high-quality stories are available, return fewer than 10. Quality beats count.
+- If fewer than 15 high-quality stories are available, return fewer than 15. Quality beats count.
 - A story must have a concrete current event: a release, launch, benchmark result, technical breakthrough, product change, infrastructure deployment, chip result, regulatory decision, or verified strategic move.
 - Exclude commentary-only or career-advice stories even if they mention Claude, Codex, OpenAI, AI agents, or another priority keyword.
 
 # 5. Source Diversity Requirement
 The final selection MUST follow a strict 70/30 split between international and Chinese sources:
-- **~70%** (approximately 7 out of 10 stories) should come from international/foreign sources: TechCrunch, Ars Technica, Hacker News, The Verge, Wired.
-- **~30%** (approximately 3 out of 10 stories) should come from Chinese/domestic sources: 36氪, 量子位(qbitai), IT之家.
+- **~70%** (approximately 10 out of 15 stories) should come from international/foreign sources: TechCrunch, Ars Technica, Hacker News, The Verge, Wired.
+- **~30%** (approximately 5 out of 15 stories) should come from Chinese/domestic sources: 36氪, 量子位(qbitai), IT之家.
 - Do NOT take all stories from just one or two sources. Spread across sources for diversity.
 - If a particular source doesn't have enough high-quality content for today, distribute its share to other sources within the same group (international or Chinese).
 - This diversity requirement only applies among stories that pass the 7.0 quality gate. Do not include weak stories just to satisfy diversity.
@@ -95,7 +95,7 @@ For each selected article, you MUST provide:
 
 # Constraints
 - Keep only stories with **credibility_score >= 7.0**.
-- Return **up to 10 items**. Do not return fewer than 10 if there are 10 strong items, but do not include weak filler to reach 10.
+- Return **up to 15 items**. Do not return fewer than 15 if there are 15 strong items, but do not include weak filler to reach 15.
 - Sort by credibility_score in descending order, BUT apply the source diversity requirement (70% international / 30% Chinese) as a higher priority constraint.
 - For articles with similar credibility, prefer concrete announcements and product/news events over opinion pieces, evergreen explainers, and "why/why not" analysis posts.
 - **Recency Priority — STRICT**: ONLY include articles published **within the last 4 days (today {TODAY} through {YESTERDAY} and up to 2 days before)**. Discard anything older.

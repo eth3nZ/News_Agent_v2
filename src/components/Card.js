@@ -3,16 +3,19 @@
  * @param {object} story - Story data object
  * @param {boolean} isPaperMode - Whether we're in paper mode
  * @param {Function} onClick - Click handler for the card
+ * @param {boolean} useChinese - Whether to show Chinese translations if available
  * @returns {HTMLElement}
  */
-export function createCard(story, isPaperMode, onClick) {
+import { escapeHtml, normalizeHttpUrl, truncateStr } from '../utils/helpers.js';
+
+export function createCard(story, isPaperMode, onClick, useChinese = false) {
   const article = document.createElement('article');
   article.className = 'bg-white dark:bg-surface-card rounded-xl p-5 mx-4 my-3 card-hover cursor-pointer border border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 animate-slide-up';
 
   if (isPaperMode) {
-    article.innerHTML = buildPaperCard(story);
+    article.innerHTML = buildPaperCard(story, useChinese);
   } else {
-    article.innerHTML = buildNewsCard(story);
+    article.innerHTML = buildNewsCard(story, useChinese);
   }
 
   article.addEventListener('click', (event) => {
@@ -25,7 +28,47 @@ export function createCard(story, isPaperMode, onClick) {
   return article;
 }
 
-function buildPaperCard(story) {
+/**
+ * Detect whether a text string is Chinese or English.
+ * Returns 'zh' if text contains Chinese characters, 'en' otherwise.
+ */
+function detectTextLang(text) {
+  return /[\u4e00-\u9fff]/.test(text) ? 'zh' : 'en';
+}
+
+/**
+ * Get the right text to display based on current language.
+ *
+ * Logic:
+ * - translations._source tells us what language the original fields are in
+ * - If user wants Chinese (`useChinese=true`) and source is Chinese → show original
+ * - If user wants Chinese (`useChinese=true`) and source is English → show translation
+ * - If user wants English (`useChinese=false`) and source is English → show original
+ * - If user wants English (`useChinese=false`) and source is Chinese → show translation
+ *
+ * When no translations._source exists (no translations at all), the function
+ * detects the language of the original text to make the right decision.
+ */
+function t(original, field, useChinese, story) {
+  const translations = story.translations || {};
+
+  // Detect source language: prefer translations._source, fallback to text heuristics
+  let sourceLang = translations._source;
+  if (!sourceLang && original) {
+    sourceLang = detectTextLang(original);
+  }
+  sourceLang = sourceLang || 'en';
+
+  if (useChinese) {
+    // Want Chinese: if source is Chinese, show original; else show translation
+    return sourceLang === 'zh' ? original : (translations[field] || original);
+  } else {
+    // Want English: if source is English, show original; else show translation
+    return sourceLang === 'en' ? original : (translations[field] || original);
+  }
+}
+
+function buildPaperCard(story, useChinese) {
   const category = story.category || 'paper_update';
   const badgeColor = category === 'paper_update' ? '#2563eb' : '#059669';
   const difficulty = story.difficulty || 5;
@@ -33,12 +76,13 @@ function buildPaperCard(story) {
   const diffColor = difficulty <= 3 ? '#22c55e' : difficulty <= 6 ? '#eab308' : difficulty <= 8 ? '#f97316' : '#ef4444';
   const sc = score >= 9 ? '#22c55e' : score >= 8 ? '#3B82F6' : score >= 7 ? '#f59e0b' : '#ef4444';
   const sub = story.sub_scores || {};
-  const tldr = story.tl_dr || '';
-  const summary = story.lay_summary || story.technical_summary || '';
+  const tldr = t(story.tl_dr || '', 'tl_dr', useChinese, story);
+  const summary = t(story.lay_summary || story.technical_summary || '', 'lay_summary', useChinese, story) || t(story.technical_summary || '', 'technical_summary', useChinese, story);
   const terms = story.key_terms || [];
-  const impact = story.real_world_impact || '';
+  const impact = t(story.real_world_impact || '', 'real_world_impact', useChinese, story);
   const dateStr = story.date || 'Recent Release';
   const url = normalizeHttpUrl(story.source_url || '');
+  const title = t(story.title || '', 'title', useChinese, story);
 
   return `
     <div class="flex items-center justify-between mb-3">
@@ -53,7 +97,7 @@ function buildPaperCard(story) {
       <span class="text-xs font-bold text-gray-900 dark:text-white" style="color:${sc}">Score: ${score.toFixed(1)}/10</span>
     </div>
 
-    <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-2 leading-snug">${escapeHtml(story.title || '')}</h2>
+    <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-2 leading-snug">${escapeHtml(title)}</h2>
 
     ${buildSubScoreBars(sub, [
       ['Novelty', 'novelty'],
@@ -83,7 +127,7 @@ function buildPaperCard(story) {
   `;
 }
 
-function buildNewsCard(story) {
+function buildNewsCard(story, useChinese) {
   const category = story.category || 'industry_update';
   const badgeColors = {
     industry_update: '#059669', product_launch: '#3B82F6',
@@ -96,10 +140,11 @@ function buildNewsCard(story) {
   const spamFlags = story.spam_flags || [];
   const sub = story.sub_scores || {};
   const sourceName = story.source_name || 'Unknown';
-  const takeaway = story.takeaway || '';
-  const summary = story.summary || '';
+  const takeaway = t(story.takeaway || '', 'takeaway', useChinese, story);
+  const summary = t(story.summary || '', 'summary', useChinese, story);
   const dateStr = story.date || '';
   const url = normalizeHttpUrl(story.source_url || '');
+  const title = t(story.title || '', 'title', useChinese, story);
 
   return `
     <div class="flex items-center justify-between mb-3">
@@ -116,7 +161,7 @@ function buildNewsCard(story) {
       <span class="text-xs font-bold" style="color:${credColor}">Trust: ${cred.toFixed(1)}/10</span>
     </div>
 
-    <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-2 leading-snug">${escapeHtml(story.title || '')}</h2>
+    <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-2 leading-snug">${escapeHtml(title)}</h2>
 
     <div class="flex items-center gap-2 text-xs mb-3">
       <span class="text-amber-600 dark:text-amber-400 font-semibold">${escapeHtml(sourceName)}</span>
@@ -159,27 +204,4 @@ function buildSubScoreBars(sub, labels) {
       }).join('')}
     </div>
   `;
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function truncateStr(str, maxLen) {
-  if (!str || str.length <= maxLen) return str || '';
-  return str.substring(0, maxLen) + '...';
-}
-
-function normalizeHttpUrl(url) {
-  if (!url) return '';
-  const value = String(url).trim();
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? value : '';
-  } catch {
-    return '';
-  }
 }
