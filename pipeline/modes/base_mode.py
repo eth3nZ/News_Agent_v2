@@ -6,10 +6,33 @@ This allows the system to be extended with new modes without modifying core code
 
 from abc import ABC, abstractmethod
 from typing import Any
+from datetime import datetime, timezone, timedelta
+
+
+def make_timezone_aware_now(offset_hours: int = 8) -> datetime:
+    """Return current datetime in a specific UTC offset.
+
+    Args:
+        offset_hours: UTC offset in hours (e.g., 8 = Asia/Shanghai, -5 = US Eastern).
+    """
+    tz = timezone(timedelta(hours=offset_hours))
+    return datetime.now(tz)
 
 
 class BaseMode(ABC):
     """Interface that every mode must implement."""
+
+    def __init__(self, timezone_offset: int = 8):
+        self._language = "English"
+        self._timezone_offset = timezone_offset
+
+    def get_timezone_offset(self) -> int:
+        """Return UTC offset in hours for date calculations (default: 8 = Asia/Shanghai)."""
+        return self._timezone_offset
+
+    def get_localized_now(self) -> datetime:
+        """Return current datetime based on this mode's configured timezone."""
+        return make_timezone_aware_now(self._timezone_offset)
 
     @abstractmethod
     def get_name(self) -> str:
@@ -63,7 +86,10 @@ class BaseMode(ABC):
 
     def get_scraper_junk_keywords(self) -> list[str]:
         """Keywords to filter out during scraping."""
-        return ["funding", "seed round", "series a", "ventures", "acquired", "appoints", "hiring", "shares slip"]
+        return [
+            "funding", "seed round", "series a", "ventures",
+            "acquired", "appoints", "hiring", "shares slip",
+        ]
 
     def get_scraper_required_keywords(self) -> list[str]:
         """Keywords that at least one scraped entry should match. Empty means no required match."""
@@ -90,11 +116,8 @@ class BaseMode(ABC):
         ]
 
     def get_language(self) -> str:
-        """
-        Return the output language for LLM-generated text.
-        Defaults to 'English'. Override or set via set_language().
-        """
-        return getattr(self, '_language', 'English')
+        """Return the output language for LLM-generated text."""
+        return self._language
 
     def set_language(self, lang: str):
         """Set the output language (e.g., 'English', 'Chinese')."""

@@ -145,9 +145,10 @@ def run_pipeline(mode: BaseMode, raw_data: str, api_key: str, base_url: str = ""
         if not model:
             model = "ds-v4-flash"
 
-    # Load prompts
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    # Load prompts — use timezone-aware dates from mode (default UTC+8)
+    localized_now = mode.get_localized_now()
+    today_str = localized_now.strftime("%Y-%m-%d")
+    yesterday_str = (localized_now - timedelta(days=1)).strftime("%Y-%m-%d")
 
     with open(mode.get_extraction_prompt_path(), "r") as f:
         system_prompt = f.read()
@@ -208,7 +209,7 @@ def run_pipeline(mode: BaseMode, raw_data: str, api_key: str, base_url: str = ""
             except Exception:
                 pass
         if not base_url:
-            base_url = "https://api.deepseek.com"
+            base_url = "https://api.ds.com"
 
     # Initialize client with resolved base URL
     client = OpenAI(

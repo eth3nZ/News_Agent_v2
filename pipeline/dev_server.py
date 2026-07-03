@@ -1,15 +1,19 @@
 """
-Development HTTP server for browser-only mode.
+[DEPRECATED] Development HTTP server — kept for backward compatibility.
 
-Run alongside `npm run dev` to provide backend API endpoints
-without needing `npm run tauri dev` (which compiles Rust).
+Use `pipeline/server.py` instead:
+  python pipeline/server.py --port 8080
 
-Usage:
-  python pipeline/dev_server.py          # default port 8080
-  python pipeline/dev_server.py --port 3000
-
-Then open http://localhost:5173 (Vite dev server) and all features work.
+This module will be removed in a future version.
 """
+
+import warnings
+
+warnings.warn(
+    "dev_server.py is deprecated; use pipeline/server.py instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import argparse
 import json
