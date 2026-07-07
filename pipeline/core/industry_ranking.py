@@ -7,15 +7,31 @@ Lightweight pre-scoring to give LLM a better-curated pool — the heavy lifting 
 def _score_industry_candidate(entry: str) -> int:
     """Score industry entries so high-value news is not crowded out by source order.
 
-    This is a lightweight pre-filter only. The three-axis LLM scoring
-    (technical, economic, novelty) performs the real evaluation downstream.
+    This is a lightweight pre-filter only. The LLM performs the real
+    technical-breakthrough evaluation downstream.
     """
     lower = entry.lower()
 
     trusted_sources = [
-        "platform source: techcrunch", "platform source: the verge",
-        "platform source: ars technica", "platform source: wired",
-        "platform source: 36氪", "platform source: 量子位", "platform source: it之家",
+        "platform source: techcrunch", "techcrunch",
+        "platform source: the verge", "the verge",
+        "platform source: ars technica", "ars technica",
+        "platform source: wired", "wired",
+        "platform source: 36氪", "36氪",
+        "platform source: 量子位", "量子位",
+        "platform source: it之家", "it之家",
+    ]
+
+    priority_labs = [
+        "openai", "anthropic", "claude", "google", "gemini",
+        "deepmind", "meta", "llama", "mistral", "xai", "grok",
+        "nvidia", "deepseek", "深度求索", "字节", "阿里", "腾讯",
+        "百度", "华为", "智谱", "月之暗面",
+    ]
+
+    priority_products = [
+        "codex", "gpt", "claude", "sonnet", "opus", "gemini",
+        "llama", "grok", "deepseek", "cuda", "blackwell",
     ]
 
     # Signals that the story has concrete substance worth LLM evaluation
@@ -24,15 +40,14 @@ def _score_industry_candidate(entry: str) -> int:
         "unveils", "introduces", "now available", "open-source", "open source",
         "benchmark", "state-of-the-art", "sota", "frontier",
         "model release", "new model", "new chip", "new architecture",
+        "reasoning model", "multimodal", "context window", "fine-tuning",
+        "weights", "dataset", "eval", "leaderboard", "latency", "throughput",
+        "compiler", "runtime", "sdk", "framework", "library",
         "api", "developer tool", "agent", "inference",
         "tapeout", "taped out", "chip", "accelerator", "gpu",
-        "market", "revenue", "profit", "earnings",
-        "acquisition", "funding", "investment", "ipo",
-        "regulation", "antitrust", "tariff", "trade",
         "发布", "推出", "上线", "开源", "模型", "基准", "突破",
-        "芯片", "推理", "智能体", "开发者工具",
-        "市场", "投资", "融资", "上市", "营收",
-        "监管", "竞争", "反垄断", "关税",
+        "新架构", "多模态", "上下文", "微调", "权重", "数据集",
+        "芯片", "推理", "智能体", "开发者工具", "编程", "框架",
     ]
 
     # Weak / low-value signals
@@ -45,20 +60,27 @@ def _score_industry_candidate(entry: str) -> int:
 
     noise_signals = [
         "funding round", "seed round", "series a",
+        "raises $", "raised $", "valuation", "earnings", "revenue",
+        "stock", "shares", "ipo", "acquisition", "merger",
+        "antitrust", "tariff", "trade war", "regulation",
         "netflix", "voice", "celebrity", "entertainment",
         "solar", "renewable energy", "climate",
-        "融资", "天使轮", "数百万元",
+        "融资", "天使轮", "数百万元", "估值", "营收", "财报",
+        "上市", "收购", "并购", "股价", "监管", "反垄断", "关税",
     ]
 
     trust_bonus = sum(4 for src in trusted_sources if src in lower)
+    lab_bonus = min(sum(1 for lab in priority_labs if lab in lower), 2) * 5
+    product_bonus = min(sum(1 for product in priority_products if product in lower), 2) * 4
 
     concrete_signals = sum(1 for s in concrete_event_signals if s in lower)
     concrete_bonus = min(concrete_signals, 3) * 3  # cap at +9
 
+    low_trust_penalty = -5 if "hacker news" in lower else 0
     weak_penalty = sum(-4 for s in weak_signals if s in lower)
     noise_penalty = sum(-3 for s in noise_signals if s in lower)
 
-    return trust_bonus + concrete_bonus + weak_penalty + noise_penalty
+    return trust_bonus + lab_bonus + product_bonus + concrete_bonus + low_trust_penalty + weak_penalty + noise_penalty
 
 
 def _select_industry_entries(entries: list[tuple[str, str, str]]) -> list[str]:
@@ -66,10 +88,10 @@ def _select_industry_entries(entries: list[tuple[str, str, str]]) -> list[str]:
 
     Strategy:
     - Let the LLM be the primary filter using three-axis scoring.
-    - We just ensure a diverse, high-signal candidate pool (~50-75 entries).
-    - No forced 70/30 split — diversity is soft, content value is priority.
+    - We ensure a diverse, high-signal candidate pool.
+    - Keep a hard target around 7:3 foreign/domestic when both groups have supply.
     """
-    MAX_ENTRIES = 80
+    MAX_ENTRIES = 40
     selected: list[tuple[str, str, str]] = []
 
     # Separate entries by group

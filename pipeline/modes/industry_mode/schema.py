@@ -1,6 +1,6 @@
 """
-Industry news schema with three-axis value scoring and credibility analysis.
-Evaluates stories on Technical Significance, Economic/Investment Impact, and Novelty.
+Industry news schema with technology-focused value scoring and credibility analysis.
+Evaluates stories on Technical Significance, Engineering Adoption Impact, and Novelty.
 """
 
 from pydantic import BaseModel, Field
@@ -41,17 +41,17 @@ class NewsArticle(BaseModel):
     )
     economic_score: float = Field(
         default=0.0,
-        description="Economic / investment impact 0-10: market moves, supply chain, funding, regulation."
+        description="Engineering adoption impact 0-10: developer usefulness, deployment impact, infrastructure/product relevance. Not finance/investment impact."
     )
     novelty_score: float = Field(
         default=0.0,
         description="Information novelty 0-10: breaking news, exclusive data, fresh analysis."
     )
 
-    # ── Combined Score (computed: technical*0.3 + economic*0.4 + novelty*0.3) ──
+    # ── Combined Score (computed: technical*0.5 + adoption*0.2 + novelty*0.3) ──
     final_score: float = Field(
         default=0.0,
-        description="Combined score = technical*0.3 + economic*0.4 + novelty*0.3. Used for ranking and threshold gate."
+        description="Combined score = technical*0.5 + economic/adoption*0.2 + novelty*0.3. Used for ranking and threshold gate."
     )
 
     # ── Credibility ──
@@ -118,6 +118,10 @@ class NewsBriefing(BaseModel):
     """Top-level output for industry news mode."""
     summary_counts: str = Field(
         description="Ex: '8 high-value stories selected from 120 candidates.'"
+    )
+    summary_counts_en: str = Field(
+        default="",
+        description="English version of summary_counts for bilingual UI display."
     )
     top_stories: list[NewsArticle] = Field(
         description="List of top stories sorted by final_score descending."

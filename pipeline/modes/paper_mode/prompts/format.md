@@ -18,7 +18,8 @@ You are a structural verification engine. Convert the deep research text into a 
 # Format Structure
 Follow this exact structure:
 {
-  "summary_counts": "string summary here",
+  "summary_counts": "string summary in the requested output language, summarizing the selection overview",
+  "summary_counts_en": "ALWAYS provide an English version of the summary_counts, translating it into English if the primary language is not English. This enables bilingual UI display.",
   "top_stories": [
     {
       "category": "paper_update" or "company_update",

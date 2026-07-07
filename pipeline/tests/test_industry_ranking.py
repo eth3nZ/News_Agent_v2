@@ -31,6 +31,18 @@ class TestScoreIndustryCandidate:
         entry = "Startup raises $10M seed round for AI"
         assert _score_industry_candidate(entry) <= 0
 
+    def test_market_only_story_penalty(self):
+        entry = "NVIDIA stock rises after analyst upgrade as AI revenue grows"
+        assert _score_industry_candidate(entry) <= 0
+
+    def test_regulation_only_story_penalty(self):
+        entry = "Regulator warns banks about AI adoption risks"
+        assert _score_industry_candidate(entry) <= 0
+
+    def test_inference_technical_release_boost(self):
+        entry = "NVIDIA releases new inference runtime with lower latency benchmark"
+        assert _score_industry_candidate(entry) > 10
+
     def test_chinese_terms_score(self):
         entry = "平台来源: 36氪: 深度求索推出 DeepSeek-V4 开源模型"
         score = _score_industry_candidate(entry)

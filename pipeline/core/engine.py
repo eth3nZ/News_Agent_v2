@@ -1,127 +1,41 @@
 """
-Mode-agnostic LLM pipeline engine.
-Uses a two-stage approach (R1 reasoning + Chat formatting) for quality + cost efficiency.
+Mode-agnostic LLM pipeline engine (orchestration only).
+
+Delegates to sub-modules:
+  - llm_client:    API retry logic
+  - memory:        deduplication
+  - metadata_injector: raw-data reference-table building & code-level metadata injection
+  - story_filter:  score-threshold filtering with progressive relaxation
+  - source_balancer: 7:3 foreign/domestic mix (industry mode only, in modes/industry_mode/)
+
 Any mode can use this engine; it reads mode-specific prompts and schema.
 """
 
 import json
 import os
-import time
-from datetime import datetime, timedelta
-from urllib.parse import urlparse
-from openai import OpenAI, APIStatusError
+from datetime import timedelta
 
 from modes.base_mode import BaseMode
+from core.llm_client import build_client, api_call_with_retry
+from core.memory import load_and_prune_memory
+from core.metadata_injector import build_raw_reference_table, _inject_raw_metadata
+from core.story_filter import filter_validated_stories
+from modes.industry_mode.source_balancer import balance_industry_source_mix
 
 
-MEMORY_MAX_ENTRIES = 40
-MAX_RETRIES = 5
-BASE_DELAY_SECONDS = 2
-
-
-def _api_call_with_retry(client, model, messages, response_format=None):
-    """Call the OpenAI-compatible API with retry logic for transient errors.
-
-    Handles 503 Service Unavailable and other transient errors by retrying
-    with exponential backoff (2s, 4s, 8s, 16s, 32s).
-    """
-    last_exception = None
-    for attempt in range(MAX_RETRIES):
-        try:
-            kwargs = {"model": model, "messages": messages}
-            if response_format:
-                kwargs["response_format"] = response_format
-            return client.chat.completions.create(**kwargs)
-        except APIStatusError as e:
-            last_exception = e
-            if e.status_code == 503:
-                delay = BASE_DELAY_SECONDS * (2 ** attempt)
-                print(f"⚠️ API 503 (attempt {attempt + 1}/{MAX_RETRIES}), retrying in {delay}s...")
-                time.sleep(delay)
-            else:
-                # Non-transient status error — re-raise immediately
-                raise
-        except Exception as e:
-            last_exception = e
-            delay = BASE_DELAY_SECONDS * (2 ** attempt)
-            print(f"⚠️ API error (attempt {attempt + 1}/{MAX_RETRIES}): {e}, retrying in {delay}s...")
-            time.sleep(delay)
-
-    # All retries exhausted
-    raise RuntimeError(
-        f"API call failed after {MAX_RETRIES} attempts. Last error: {last_exception}"
-    ) from last_exception
-
-
-def load_and_prune_memory(data_file_path: str) -> list[str]:
-    """Load seen titles from previous runs to avoid duplicates."""
-    if not os.path.exists(data_file_path):
-        return []
+def _load_settings() -> dict:
+    """Load data/settings.json, returning empty dict on failure."""
+    settings_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "data", "settings.json"
+    )
+    if not os.path.exists(settings_path):
+        return {}
     try:
-        with open(data_file_path, "r") as f:
-            data = json.load(f)
-        stories = data.get("top_stories", [])
-        pruned = stories[:MEMORY_MAX_ENTRIES]
-        return [story.get("title", "").lower().strip() for story in pruned if story.get("title")]
+        with open(settings_path, "r") as f:
+            return json.load(f)
     except Exception:
-        return []
-
-
-def _filter_validated_stories(mode: BaseMode, stories: list) -> list[dict]:
-    """Apply mode threshold after LLM formatting so weak items cannot leak into output.
-
-    For industry mode: uses final_score (three-axis combined) for threshold & sorting,
-    with credibility_score >= 6.0 as a secondary gate. Falls back to credibility_score
-    for paper/other modes.
-    """
-    threshold = mode.get_filter_threshold()
-    max_stories = mode.get_max_stories()
-
-    kept = []
-    dropped = []
-    for story in stories:
-        story_data = story.model_dump()
-        story_data["source_url"] = _normalize_source_url(story_data.get("source_url", ""))
-
-        if mode.get_name() == "industry":
-            final_score = float(story_data.get("final_score", 0) or 0)
-            cred_score = float(story_data.get("credibility_score", 0) or 0)
-            is_spam = bool(story_data.get("is_spam", False))
-            if final_score >= threshold and cred_score >= 6.0 and not is_spam:
-                kept.append(story_data)
-            else:
-                dropped.append((story_data.get("title", "Untitled"), final_score, cred_score, is_spam))
-        else:
-            score = float(story_data.get("score", 0) or 0)
-            is_spam = bool(story_data.get("is_spam", False))
-            if score >= threshold and not is_spam:
-                kept.append(story_data)
-            else:
-                dropped.append((story_data.get("title", "Untitled"), score, is_spam))
-
-    if dropped:
-        print(
-            f"🧹 [{mode.get_name()}] Dropped {len(dropped)} stories below threshold "
-            f"{threshold:.1f} or flagged spam."
-        )
-
-    if mode.get_name() == "industry":
-        kept.sort(key=lambda s: float(s.get("final_score", 0) or 0), reverse=True)
-    else:
-        kept.sort(key=lambda s: float(s.get("score", 0) or 0), reverse=True)
-
-    return kept[:max_stories]
-
-
-def _normalize_source_url(url: str) -> str:
-    """Keep only clickable HTTP(S) source URLs."""
-    if not url:
-        return ""
-    url = str(url).strip()
-    parsed = urlparse(url)
-    if parsed.scheme in {"http", "https"} and parsed.netloc:
-        return url
-    return ""
+        return {}
 
 
 def run_pipeline(mode: BaseMode, raw_data: str, api_key: str, base_url: str = "", model: str = "") -> dict:
@@ -139,51 +53,33 @@ def run_pipeline(mode: BaseMode, raw_data: str, api_key: str, base_url: str = ""
         Parsed and validated output dict with "metadata" and "top_stories".
     """
     if not raw_data.strip():
-        print(f"❌ [{mode.get_name()}] No data scraped. Exiting pipeline.")
+        print(f"\u274c [{mode.get_name()}] No data scraped. Exiting pipeline.")
         return {"metadata": {"summary_counts": "No data available."}, "top_stories": []}
 
-    # Resolve model name: parameter > settings.json > hardcoded default
-    if not model:
-        settings_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "data", "settings.json"
-        )
-        if os.path.exists(settings_path):
-            try:
-                with open(settings_path, "r") as f:
-                    settings = json.load(f)
-                model = settings.get("model", "")
-            except Exception:
-                pass
-        if not model:
-            model = "ds-v4-flash"
+    # ── Resolve settings ─────────────────────────────────────────────────
+    settings = _load_settings()
 
-    # Load prompts — use timezone-aware dates from mode (default UTC+8)
+    if not model:
+        model = settings.get("model", "ds-v4-flash")
+    if not base_url:
+        base_url = settings.get("baseUrl", "https://api.ds.com")
+    if not api_key:
+        api_key = settings.get("apiKey", "")
+
+    # ── Load prompts ─────────────────────────────────────────────────────
     localized_now = mode.get_localized_now()
     today_str = localized_now.strftime("%Y-%m-%d")
     yesterday_str = (localized_now - timedelta(days=1)).strftime("%Y-%m-%d")
 
     with open(mode.get_extraction_prompt_path(), "r") as f:
         system_prompt = f.read()
-    # Substitute date placeholders
     system_prompt = system_prompt.replace("{TODAY}", today_str)
     system_prompt = system_prompt.replace("{YESTERDAY}", yesterday_str)
 
     with open(mode.get_formatting_prompt_path(), "r") as f:
         formatting_instruction = f.read()
 
-    threshold = mode.get_filter_threshold()
-    max_stories = mode.get_max_stories()
-    threshold_req = (
-        f"\n\n# Hard Selection Threshold\n"
-        f"Only include stories with final score >= {threshold:.1f}. "
-        f"Return at most {max_stories} stories. Do not backfill with weaker stories "
-        f"just to reach {max_stories}; quality is more important than count."
-    )
-    system_prompt += threshold_req
-    formatting_instruction += threshold_req
-
-    # Inject language requirement into both prompts
+    # ── Inject language requirement ──────────────────────────────────────
     lang = mode.get_language()
     lang_req = (
         f"\n\n# Language Requirement\n"
@@ -201,38 +97,19 @@ def run_pipeline(mode: BaseMode, raw_data: str, api_key: str, base_url: str = ""
         f"except for proper nouns and product/company names."
     )
 
-    # Load dedup memory
+    # ── Load dedup memory ────────────────────────────────────────────────
     seen = load_and_prune_memory(mode.get_data_file_path())
     memory_context = (
         "\n\n# DE-DUPLICATION RULE\n"
         "Do not select stories with these titles:\n" + "\n".join(seen)
     )
 
-    # Resolve base URL: parameter > settings.json > hardcoded default
-    if not base_url:
-        settings_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "data", "settings.json"
-        )
-        if os.path.exists(settings_path):
-            try:
-                with open(settings_path, "r") as f:
-                    settings = json.load(f)
-                base_url = settings.get("baseUrl", "")
-            except Exception:
-                pass
-        if not base_url:
-            base_url = "https://api.ds.com"
+    # ── Initialize LLM client ────────────────────────────────────────────
+    client = build_client(api_key=api_key, base_url=base_url)
 
-    # Initialize client with resolved base URL
-    client = OpenAI(
-        base_url=base_url,
-        api_key=api_key
-    )
-
-    # Phase 1: Reasoning extraction (heavy reasoning)
-    print(f"🧠 [{mode.get_name()}] Phase 1: Reasoning extraction using model '{model}'...")
-    r1_response = _api_call_with_retry(
+    # ── Phase 1: Reasoning extraction ────────────────────────────────────
+    print(f"\U0001f9e0 [{mode.get_name()}] Phase 1: Reasoning extraction using model '{model}'...")
+    r1_response = api_call_with_retry(
         client,
         model=model,
         messages=[
@@ -242,42 +119,64 @@ def run_pipeline(mode: BaseMode, raw_data: str, api_key: str, base_url: str = ""
     )
     extracted_text = r1_response.choices[0].message.content
 
-    # Phase 2: Structured formatting (cheap chat model)
-    print(f"🧐 [{mode.get_name()}] Phase 2: Structuring output using model '{model}'...")
-    format_response = _api_call_with_retry(
+    # Build reference table for Phase 2
+    raw_ref_table = build_raw_reference_table(raw_data)
+    phase2_input = extracted_text
+    if raw_ref_table:
+        phase2_input += (
+            "\n\n# RAW DATE & URL REFERENCE TABLE\n"
+            "Use the table below to fill the `source_url` and `date` fields accurately.\n"
+            "For each story title you generated, find the matching title below and copy its date/URL.\n"
+            "Do NOT fabricate URLs or dates. Leave empty if no match.\n\n"
+            + raw_ref_table
+        )
+
+    # ── Phase 2: Structured formatting ───────────────────────────────────
+    print(f"\U0001f9d0 [{mode.get_name()}] Phase 2: Structuring output using model '{model}'...")
+    format_response = api_call_with_retry(
         client,
         model=model,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": formatting_instruction},
-            {"role": "user", "content": extracted_text},
+            {"role": "user", "content": phase2_input},
         ],
     )
 
     raw_json = format_response.choices[0].message.content
 
-    # Validate with mode's schema
+    # ── Validate with mode's schema ──────────────────────────────────────
     schema_class = mode.get_schema_class()
     try:
         validated = schema_class.model_validate_json(raw_json)
     except Exception as e:
-        print(f"⚠️ [{mode.get_name()}] Pydantic fallback: {e}")
+        print(f"\u26a0\ufe0f [{mode.get_name()}] Pydantic fallback: {e}")
         clean = raw_json.replace("```json", "").replace("```", "").strip()
         validated = schema_class.model_validate_json(clean)
 
-    # Build output payload
+    # ── Build output payload ─────────────────────────────────────────────
     payload = {
         "metadata": {
             "last_updated": f"[{mode.get_name()}] Pipeline sync complete",
             "summary_counts": validated.summary_counts,
+            "summary_counts_en": validated.summary_counts_en if validated.summary_counts_en else validated.summary_counts,
         },
-        "top_stories": _filter_validated_stories(mode, validated.top_stories),
+        "top_stories": filter_validated_stories(mode, validated.top_stories),
     }
 
-    # Save to mode's data file
+    # ── Code-level metadata injection ────────────────────────────────────
+    # (bypasses LLM unreliability for dates/URLs)
+    _inject_raw_metadata(payload["top_stories"], raw_data)
+    # Balanced AFTER metadata injection so URL-based source inference is accurate
+    if mode.get_name() == "industry":
+        payload["top_stories"] = balance_industry_source_mix(
+            payload["top_stories"], mode.get_max_stories()
+        )
+
+    # ── Save to mode's data file ─────────────────────────────────────────
     os.makedirs(os.path.dirname(mode.get_data_file_path()) or ".", exist_ok=True)
     with open(mode.get_data_file_path(), "w") as f:
         json.dump(payload, f, indent=2)
 
-    print(f"🎯 [{mode.get_name()}] Pipeline complete. {len(payload['top_stories'])} stories saved.")
+    print(f"\U0001f3af [{mode.get_name()}] Pipeline complete. {len(payload['top_stories'])} stories saved.")
     return payload

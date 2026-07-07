@@ -56,6 +56,10 @@ class BaseMode(ABC):
         """Maximum number of stories to return per sync."""
         ...
 
+    def get_min_stories(self) -> int:
+        """Minimum preferred number of stories. Modes may override."""
+        return 0
+
     @abstractmethod
     def get_schema_class(self):
         """Return the Pydantic schema class for this mode's output."""

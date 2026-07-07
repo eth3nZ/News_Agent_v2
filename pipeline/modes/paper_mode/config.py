@@ -57,7 +57,6 @@ class PaperMode(BaseMode):
     def get_display_config(self) -> dict[str, Any]:
         return {
             "primary_color": "#2563eb",
-            "icon": "📄",
             "title": "Paper Intelligence",
             "subtitle": "Research Papers & Breakthroughs",
             "badge_colors": {

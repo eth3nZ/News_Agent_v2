@@ -1,13 +1,9 @@
-/**
- * Entry point for News Agent Tauri app.
- */
-import { initApp } from './components/App.js';
-import { store } from './stores/newsStore.js';
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import App from './components/App.vue';
+import './styles/input.css';
 
-// Initialize the app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-  const root = document.getElementById('app');
-  if (root) {
-    initApp(root);
-  }
-});
+const app = createApp(App);
+const pinia = createPinia();
+app.use(pinia);
+app.mount('#app');

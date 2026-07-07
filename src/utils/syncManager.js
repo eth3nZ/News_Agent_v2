@@ -7,6 +7,27 @@ import { translateAllStories, detectTextLang } from './translator.js';
 
 let phaseTimers = [];
 
+const REQUIRED_TRANSLATION_FIELDS = [
+  'title', 'summary', 'takeaway', 'content', 'trust_report',
+  'lay_summary', 'technical_summary', 'real_world_impact', 'tl_dr'
+];
+
+function storySourceLang(story) {
+  const sampleField = story?.title || story?.summary || story?.takeaway || story?.lay_summary || story?.content || '';
+  return detectTextLang(sampleField) || 'en';
+}
+
+function missingOppositeLanguageFields(story) {
+  const translations = story.translations || {};
+  const targetLang = storySourceLang(story) === 'zh' ? 'en' : 'zh';
+
+  return REQUIRED_TRANSLATION_FIELDS.some(field => {
+    if (!story[field]) return false;
+    const translated = translations[field] || '';
+    return !translated || detectTextLang(translated) !== targetLang;
+  });
+}
+
 /**
  * Load current data for the active mode from file, then auto-translate
  * if the loaded data has no translations yet and Baidu credentials are configured.
@@ -16,20 +37,17 @@ export async function loadCurrentData() {
   try {
     const data = await readDataFile(state.mode);
     store.setData(data);
-    const dot = document.getElementById('status-dot');
-    if (dot) updateStatus(dot, data?.top_stories?.length ? 'ok' : 'error');
+    // status derived from data presence (setData handled)
 
     // Auto-translate existing data that hasn't been translated yet.
     // This runs in the background so UI is not blocked.
-    const needsTranslation = data?.top_stories?.some(
-      s => !s.translations || Object.keys(s.translations).length <= 1
-    );
-    if (needsTranslation && state.baiduAppId && state.baiduSecretKey) {
+    const needsTranslation = data?.top_stories?.some(missingOppositeLanguageFields);
+
+    if (state.baiduAppId && state.baiduSecretKey && needsTranslation) {
       try {
         // Detect the actual language of data to determine translation direction
         const firstStory = data.top_stories[0];
-        const sampleField = firstStory?.title || firstStory?.summary || firstStory?.takeaway || firstStory?.lay_summary || '';
-        const sourceLang = detectTextLang(sampleField) || 'en';
+        const sourceLang = storySourceLang(firstStory);
         const targetLang = sourceLang === 'zh' ? 'en' : 'zh';
 
         const added = await translateAllStories(data, state.baiduAppId, state.baiduSecretKey, targetLang);
@@ -37,7 +55,7 @@ export async function loadCurrentData() {
           await writeDataFile(state.mode, data);
           const freshData = await readDataFile(state.mode);
           store.setData(freshData);
-          console.log('✅ Auto-translated existing data on load');
+          console.log('✅ Auto-translated missing fields on load');
         }
       } catch (transErr) {
         console.error('Auto-translate failed on load:', transErr);
@@ -47,17 +65,8 @@ export async function loadCurrentData() {
     }
   } catch (err) {
     store.setData(null);
-    const dot = document.getElementById('status-dot');
-    if (dot) updateStatus(dot, 'error');
+    // status error (setError/setData(null) handled)
   }
-}
-
-function updateStatus(el, status) {
-  el.className = 'w-2 h-2 rounded-full shrink-0 ' + (
-    status === 'ok' ? 'bg-green-400' :
-    status === 'loading' ? 'bg-yellow-400 animate-pulse' :
-    'bg-red-400'
-  );
 }
 
 /**
@@ -75,6 +84,10 @@ function startPhaseSimulation() {
 function stopPhaseSimulation() {
   phaseTimers.forEach(clearTimeout);
   phaseTimers = [];
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
@@ -100,8 +113,7 @@ async function autoTranslateIfNeeded(data, state) {
 
   // Detect the original language of the first story to determine translation direction
   const firstStory = data.top_stories[0];
-  const sampleField = firstStory?.title || firstStory?.summary || firstStory?.takeaway || firstStory?.lay_summary || '';
-  const sourceLang = detectTextLang(sampleField) || 'en';
+  const sourceLang = storySourceLang(firstStory);
 
   // We translate INTO the opposite language of the source
   // If source is Chinese → translate to English (targetLang='en')
@@ -126,20 +138,22 @@ async function autoTranslateIfNeeded(data, state) {
 export async function handleSync() {
   const state = store.state;
   store.setLoading(true);
+  store.setPhase(1);
   startPhaseSimulation();
-
-  const dot = document.getElementById('status-dot');
-  if (dot) updateStatus(dot, 'loading');
+  // status loading (setLoading handled)
 
   try {
     const result = await runPipeline(state.mode, state.lang, state.apiKey, state.baseUrl, state.model);
     stopPhaseSimulation();
 
     if (result.success) {
+      store.setPhase(4);
+      await delay(600);
+
       const data = await readDataFile(state.mode);
       store.setData(data);
       store.setViewingHistory(false);
-      if (dot) updateStatus(dot, 'ok');
+      // status ok (setData handled)
 
       // Auto-translate into the opposite language
       const translated = await autoTranslateIfNeeded(data, state);
@@ -150,11 +164,11 @@ export async function handleSync() {
       }
     } else {
       store.setError(result.stderr || result.stdout || result.message || 'Pipeline failed');
-      if (dot) updateStatus(dot, 'error');
+      // status error (setError/setData(null) handled)
     }
   } catch (err) {
     stopPhaseSimulation();
     store.setError(err.message || 'Sync failed');
-    if (dot) updateStatus(dot, 'error');
+    // status error (setError/setData(null) handled)
   }
 }

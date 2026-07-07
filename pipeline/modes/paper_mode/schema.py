@@ -116,6 +116,10 @@ class PaperBriefing(BaseModel):
     summary_counts: str = Field(
         description="Ex: '3 crucial research papers, 2 core industry updates.'"
     )
+    summary_counts_en: str = Field(
+        default="",
+        description="English version of summary_counts for bilingual UI display."
+    )
     top_stories: list[PaperStory] = Field(
         description="List of top verified and highest-rated paper stories."
     )
