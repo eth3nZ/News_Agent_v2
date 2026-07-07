@@ -6,11 +6,11 @@ A desktop app that aggregates the latest **AI industry news** and **research pap
 
 ## What does it do?
 
-- 📰 **Industry News** — Curates trending AI/business stories from top tech sources
-- 📄 **Paper Intelligence** — Finds and analyzes recent AI research papers
-- 🧠 **AI Analysis** — Each story is extracted, summarized, and scored by an LLM
-- 🏷️ **Rich Metadata** — Key terms, knowledge gaps, real-world impact — all auto-generated
-- 🌐 **Bilingual** — Switch between Chinese and English views instantly
+- **Industry News** — Curates trending AI/business stories from top tech sources
+- **Paper Intelligence** — Finds and analyzes recent AI research papers
+- **AI Analysis** — Each story is extracted, summarized, and scored by an LLM
+- **Rich Metadata** — Key terms, knowledge gaps, real-world impact — all auto-generated
+- **Bilingual** — Switch between Chinese and English views instantly
 
 ---
 
@@ -81,7 +81,7 @@ pip install pydantic openai
 npm run tauri dev
 ```
 
-> ⚠️ **First-time `npm run tauri dev` downloads ~80 MB of Rust crates and produces ~5.7 GB of compile cache** in `src-tauri/target/`. This is the Rust compiler at work, not "useless packages" — it's equivalent to `node_modules` but for a systems language. The final `.deb`/`.dmg`/`.msi` installer is only **10–25 MB** and requires **no Rust** to run.
+> **First-time `npm run tauri dev` downloads ~80 MB of Rust crates and produces ~5.7 GB of compile cache** in `src-tauri/target/`. This is the Rust compiler at work, not "useless packages" — it's equivalent to `node_modules` but for a systems language. The final `.deb`/`.dmg`/`.msi` installer is only **10–25 MB** and requires **no Rust** to run.
 >
 > **Want to skip the Rust compilation entirely?** See [Browser-only setup](#browser-only-setup-zero-rust-compilation) below.
 
