@@ -30,7 +30,7 @@ Go to the [Releases page](https://github.com/eth3nZ/News_Agent_v2/releases) and 
 
 > **Don't know which one?** If you use a Mac, download `.dmg`. If you use Windows, download `.msi`.
 
-### Step 2: Install Python (if you haven't already)
+### Step 2: Install Python
 
 The app needs Python to run its brain. This only takes 2 minutes:
 
