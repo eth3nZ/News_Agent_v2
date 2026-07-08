@@ -22,7 +22,18 @@ import { baiduTranslate } from './api.js';
  * Returns 'zh' if text contains Chinese characters, 'en' otherwise.
  */
 export function detectTextLang(text) {
-  return /[\u4e00-\u9fff]/.test(text) ? 'zh' : 'en';
+  if (!hasMeaningfulText(text)) return 'en';
+  const value = String(text);
+  const cjkCount = (value.match(/[\u4e00-\u9fff]/g) || []).length;
+  const latinCount = (value.match(/[A-Za-z]/g) || []).length;
+
+  if (cjkCount === 0) return 'en';
+  if (latinCount === 0) return 'zh';
+
+  // Paper-mode text frequently mixes model names, acronyms, citations, and
+  // Chinese prose. Treat small amounts of CJK inside mostly-English text as
+  // English so stored translations are still usable.
+  return cjkCount > latinCount * 0.25 ? 'zh' : 'en';
 }
 
 function isMostlyTargetLang(text, targetLang) {
@@ -61,9 +72,15 @@ export function t(original, field, useChinese, story) {
   const translations = story.translations || {};
   const wantedLang = desiredLang(useChinese);
   const translated = translations[field] || '';
+  const fieldTargets = translations._fieldTargets || {};
+  const fieldTarget = fieldTargets[field] || translations._target;
 
   if (isMostlyTargetLang(original, wantedLang)) {
     return original;
+  }
+
+  if (fieldTarget === wantedLang && hasMeaningfulText(translated)) {
+    return translated;
   }
 
   if (isMostlyTargetLang(translated, wantedLang)) {
@@ -80,6 +97,44 @@ export function t(original, field, useChinese, story) {
   // Keep the field visible while missing translations are being generated.
   // The background translation pass will replace this with the requested
   // language as soon as the field-level translation is available.
+  return original;
+}
+
+function objectTextSample(item) {
+  if (!item || typeof item !== 'object') return String(item || '');
+  return Object.values(item)
+    .filter(value => typeof value === 'string')
+    .join(' ');
+}
+
+function arrayLang(items) {
+  const sample = (items || []).map(objectTextSample).join(' ');
+  return detectTextLang(sample);
+}
+
+/**
+ * Select translated array fields such as paper key_terms and knowledge_gaps.
+ */
+export function translatedArray(originalItems, field, useChinese, story) {
+  const original = Array.isArray(originalItems) ? originalItems : [];
+  const translations = story.translations || {};
+  const translated = translations[`${field}_translations`];
+  const wantedLang = desiredLang(useChinese);
+  const fieldTargets = translations._fieldTargets || {};
+  const fieldTarget = fieldTargets[field] || translations._target;
+
+  if (original.length > 0 && arrayLang(original) === wantedLang) {
+    return original;
+  }
+
+  if (fieldTarget === wantedLang && Array.isArray(translated) && translated.length > 0) {
+    return translated;
+  }
+
+  if (Array.isArray(translated) && translated.length > 0 && arrayLang(translated) === wantedLang) {
+    return translated;
+  }
+
   return original;
 }
 
@@ -167,22 +222,52 @@ export async function translateAllStories(data, appId, secretKey, targetLang = '
   const stories = data.top_stories || [];
   if (stories.length === 0) return false;
 
-  const fromLang = targetLang === 'zh' ? 'en' : 'zh';
+  const legacyTargetLang = targetLang;
+
+  function oppositeLang(text) {
+    return detectTextLang(text) === 'zh' ? 'en' : 'zh';
+  }
+
+  function translatedFieldTarget(story, field) {
+    const translations = story.translations || {};
+    return translations._fieldTargets?.[field] || translations._target || '';
+  }
+
+  function hasUsableFieldTranslation(story, field, target) {
+    const translated = story.translations?.[field] || '';
+    return translatedFieldTarget(story, field) === target && hasMeaningfulText(translated);
+  }
+
+  function hasUsableArrayTranslation(story, field, target) {
+    const translated = story.translations?.[`${field}_translations`];
+    return translatedFieldTarget(story, field) === target && Array.isArray(translated) && translated.length > 0;
+  }
 
   // ——— Step 1: Collect all unique text strings that need translation ———
   // Collect simple text fields
-  const textSet = new Set();
+  const textByDirection = {
+    en_zh: new Set(),
+    zh_en: new Set(),
+  };
+  const addTextForTranslation = (text) => {
+    if (!hasMeaningfulText(text)) return;
+    const from = detectTextLang(text);
+    const to = from === 'zh' ? 'en' : 'zh';
+    textByDirection[`${from}_${to}`].add(text);
+  };
+
   stories.forEach(story => {
     TRANSLATABLE_FIELDS.forEach(field => {
       if (!story[field]) return;
-      if (isMostlyTargetLang(story[field], targetLang)) return;
+      const fieldTarget = oppositeLang(story[field]);
+      if (hasUsableFieldTranslation(story, field, fieldTarget)) return;
       if (field === 'content' || field === 'summary' || field === 'trust_report') {
         const chunks = splitIntoChunks(story[field]);
         chunks.forEach(c => {
-          if (!isMostlyTargetLang(c, targetLang)) textSet.add(c);
+          addTextForTranslation(c);
         });
       } else {
-        textSet.add(story[field]);
+        addTextForTranslation(story[field]);
       }
     });
 
@@ -190,32 +275,39 @@ export async function translateAllStories(data, appId, secretKey, targetLang = '
     for (const [arrayField, subFields] of Object.entries(TRANSLATABLE_ARRAY_FIELDS)) {
       const arr = story[arrayField];
       if (!Array.isArray(arr)) continue;
+      const sample = arr.map(objectTextSample).join(' ');
+      const fieldTarget = oppositeLang(sample);
+      if (hasUsableArrayTranslation(story, arrayField, fieldTarget)) continue;
       arr.forEach(item => {
         subFields.forEach(sub => {
           const text = item[sub];
-          if (text && !isMostlyTargetLang(text, targetLang)) {
-            textSet.add(text);
-          }
+          addTextForTranslation(text);
         });
       });
     }
   });
 
-  const allTexts = Array.from(textSet);
-
   // ——— Step 2: Batch-translate via Baidu ———
   const BATCH_SIZE = 5;
   const BATCH_DELAY_MS = 1200;
   let fullMap = {};
-  for (let i = 0; i < allTexts.length; i += BATCH_SIZE) {
-    const batch = allTexts.slice(i, i + BATCH_SIZE);
-    const result = await baiduTranslate(batch, appId, secretKey, fromLang, targetLang);
-    if (result.error) {
-      throw new Error(`Baidu Translate failed: ${result.error}`);
-    }
-    Object.assign(fullMap, result.translations);
-    if (i + BATCH_SIZE < allTexts.length) {
-      await delay(BATCH_DELAY_MS);
+  const directions = [
+    { key: 'en_zh', from: 'en', to: 'zh' },
+    { key: 'zh_en', from: 'zh', to: 'en' },
+  ];
+
+  for (const direction of directions) {
+    const allTexts = Array.from(textByDirection[direction.key]);
+    for (let i = 0; i < allTexts.length; i += BATCH_SIZE) {
+      const batch = allTexts.slice(i, i + BATCH_SIZE);
+      const result = await baiduTranslate(batch, appId, secretKey, direction.from, direction.to);
+      if (result.error) {
+        throw new Error(`Baidu Translate failed: ${result.error}`);
+      }
+      Object.assign(fullMap, result.translations);
+      if (i + BATCH_SIZE < allTexts.length) {
+        await delay(BATCH_DELAY_MS);
+      }
     }
   }
 
@@ -223,24 +315,27 @@ export async function translateAllStories(data, appId, secretKey, targetLang = '
   let added = false;
   stories.forEach(story => {
     const translations = { ...(story.translations || {}) };
+    const fieldTargets = { ...(translations._fieldTargets || {}) };
 
     // Translate simple text fields
     TRANSLATABLE_FIELDS.forEach(field => {
       const original = story[field];
       if (!original) return;
-      if (isMostlyTargetLang(original, targetLang)) return;
+      const fieldTarget = oppositeLang(original);
+      if (hasUsableFieldTranslation(story, field, fieldTarget)) return;
 
       if (field === 'content' || field === 'summary' || field === 'trust_report') {
         const chunks = splitIntoChunks(original);
-        const translatedChunks = chunks.map(c => isMostlyTargetLang(c, targetLang) ? c : (fullMap[c] || ''));
+        const translatedChunks = chunks.map(c => fullMap[c] || '');
         if (translatedChunks.some(tc => tc.length > 0)) {
           const hasTranslation = translatedChunks.some(
-            (tc, i) => tc.length > 0 && tc !== chunks[i] && isMostlyTargetLang(tc, targetLang)
+            (tc, i) => tc.length > 0 && tc !== chunks[i] && isMostlyTargetLang(tc, oppositeLang(chunks[i]))
           );
           if (hasTranslation) {
             const rebuilt = translatedChunks.map((tc, i) => tc || chunks[i]).join('\n');
             if (rebuilt !== original) {
               translations[field] = rebuilt;
+              fieldTargets[field] = fieldTarget;
               added = true;
             }
           }
@@ -248,6 +343,7 @@ export async function translateAllStories(data, appId, secretKey, targetLang = '
       } else {
         if (fullMap[original]) {
           translations[field] = fullMap[original];
+          fieldTargets[field] = fieldTarget;
           added = true;
         }
       }
@@ -257,6 +353,9 @@ export async function translateAllStories(data, appId, secretKey, targetLang = '
     for (const [arrayField, subFields] of Object.entries(TRANSLATABLE_ARRAY_FIELDS)) {
       const arr = story[arrayField];
       if (!Array.isArray(arr) || arr.length === 0) continue;
+      const sample = arr.map(objectTextSample).join(' ');
+      const fieldTarget = oppositeLang(sample);
+      if (hasUsableArrayTranslation(story, arrayField, fieldTarget)) continue;
       let hasTranslation = false;
       const translatedArray = arr.map((item, idx) => {
         const newItem = { ...item };
@@ -271,13 +370,15 @@ export async function translateAllStories(data, appId, secretKey, targetLang = '
       });
       if (hasTranslation) {
         translations[`${arrayField}_translations`] = translatedArray;
+        fieldTargets[arrayField] = fieldTarget;
         added = true;
       }
     }
 
     if (Object.keys(translations).length > 0) {
-      translations._source = fromLang;
-      translations._target = targetLang;
+      translations._source = legacyTargetLang === 'zh' ? 'en' : 'zh';
+      translations._target = legacyTargetLang;
+      translations._fieldTargets = fieldTargets;
       story.translations = translations;
     }
   });

@@ -1,7 +1,7 @@
 <script setup>
-  import { computed, onMounted, onUnmounted, ref } from 'vue';
+  import { computed, onMounted, onUnmounted, ref, toRefs } from 'vue';
   import { useNewsStore } from '../stores/useNewsStore.js';
-  import { t, detectTextLang } from '../utils/translator.js';
+  import { t, detectTextLang, translatedArray } from '../utils/translator.js';
   import { escapeHtml, normalizeHttpUrl } from '../utils/helpers.js';
 
   const props = defineProps({
@@ -12,7 +12,7 @@
 
   const emit = defineEmits(['close']);
 
-  const { story, isPaperMode, useChinese } = props;
+  const { story, isPaperMode, useChinese } = toRefs(props);
 
   const store = useNewsStore();
 
@@ -53,50 +53,36 @@
   const impactLabelClass = computed(() => sectionHeaderClass);
   const impactContentClass = computed(() => sectionBodyClass);
 
-  const url = computed(() => normalizeHttpUrl(story.source_url || story.url || story.link || ''));
-  const title = computed(() => t(story.title || '', 'title', useChinese, story));
-  const dateStr = computed(() => story.date || '');
-  const sub = computed(() => story.sub_scores || {});
+  const url = computed(() => normalizeHttpUrl(story.value.source_url || story.value.url || story.value.link || ''));
+  const title = computed(() => t(story.value.title || '', 'title', useChinese.value, story.value));
+  const dateStr = computed(() => story.value.date || '');
+  const sub = computed(() => story.value.sub_scores || {});
 
   // Paper mode fields
-  const score = computed(() => story.score || 0);
-  const difficulty = computed(() => story.difficulty || 5);
-  const tldr = computed(() => t(story.tl_dr || '', 'tl_dr', useChinese, story));
-  const lay = computed(() => t(story.lay_summary || '', 'lay_summary', useChinese, story));
-  const tech = computed(() => t(story.technical_summary || '', 'technical_summary', useChinese, story));
-  const terms = computed(() => {
-    const translations = story.translations || {};
-    // When user wants English and translated key_terms exist, use them
-    if (!useChinese && translations.key_terms_translations) {
-      return translations.key_terms_translations;
-    }
-    return story.key_terms || [];
-  });
-  const gaps = computed(() => {
-    const translations = story.translations || {};
-    // When user wants English and translated knowledge_gaps exist, use them
-    if (!useChinese && translations.knowledge_gaps_translations) {
-      return translations.knowledge_gaps_translations;
-    }
-    return story.knowledge_gaps || [];
-  });
-  const impact = computed(() => t(story.real_world_impact || '', 'real_world_impact', useChinese, story));
-  const paperContent = computed(() => t(story.content || '', 'content', useChinese, story));
+  const score = computed(() => story.value.score || 0);
+  const difficulty = computed(() => story.value.difficulty || 5);
+  const tldr = computed(() => t(story.value.tl_dr || '', 'tl_dr', useChinese.value, story.value));
+  const lay = computed(() => t(story.value.lay_summary || '', 'lay_summary', useChinese.value, story.value));
+  const tech = computed(() => t(story.value.technical_summary || '', 'technical_summary', useChinese.value, story.value));
+  const terms = computed(() => translatedArray(story.value.key_terms || [], 'key_terms', useChinese.value, story.value));
+  const gaps = computed(() => translatedArray(story.value.knowledge_gaps || [], 'knowledge_gaps', useChinese.value, story.value));
+  const impact = computed(() => t(story.value.real_world_impact || '', 'real_world_impact', useChinese.value, story.value));
+  const paperContent = computed(() => t(story.value.content || '', 'content', useChinese.value, story.value));
 
   // News mode fields
-  const cred = computed(() => story.credibility_score || 0);
-  const category = computed(() => story.category || 'industry_update');
-  const sourceName = computed(() => story.source_name || 'Unknown');
-  const isSpam = computed(() => story.is_spam || false);
-  const spamFlags = computed(() => story.spam_flags || []);
-  const trustReport = computed(() => t(story.trust_report || '', 'trust_report', useChinese, story));
-  const takeaway = computed(() => t(story.takeaway || '', 'takeaway', useChinese, story));
+  const cred = computed(() => story.value.credibility_score || 0);
+  const category = computed(() => story.value.category || 'industry_update');
+  const sourceName = computed(() => story.value.source_name || 'Unknown');
+  const isSpam = computed(() => story.value.is_spam || false);
+  const spamFlags = computed(() => story.value.spam_flags || []);
+  const trustReport = computed(() => t(story.value.trust_report || '', 'trust_report', useChinese.value, story.value));
+  const takeaway = computed(() => t(story.value.takeaway || '', 'takeaway', useChinese.value, story.value));
   const summary = computed(() => {
-    const raw = story.summary || story.short_summary || story.description || story.takeaway || '';
-    const field = story.summary ? 'summary' : story.short_summary ? 'short_summary' : story.description ? 'description' : 'takeaway';
-    return t(raw, field, useChinese, story);
+    const raw = story.value.summary || story.value.short_summary || story.value.description || story.value.takeaway || '';
+    const field = story.value.summary ? 'summary' : story.value.short_summary ? 'short_summary' : story.value.description ? 'description' : 'takeaway';
+    return t(raw, field, useChinese.value, story.value);
   });
-  const newsContent = computed(() => t(story.content || '', 'content', useChinese, story));
+  const newsContent = computed(() => t(story.value.content || '', 'content', useChinese.value, story.value));
   const credColor = computed(() => {
     const c = cred.value;
     return c >= 7 ? '#22c55e' : c >= 5 ? '#f59e0b' : '#ef4444';
@@ -110,7 +96,7 @@
 
   // Map English section headers to Chinese
   function localizeSectionHeader(headerText) {
-    if (!useChinese) return headerText;
+    if (!useChinese.value) return headerText;
     const headerMap = {
       'Key Facts': '关键事实',
       'Context/Background': '背景与上下文',

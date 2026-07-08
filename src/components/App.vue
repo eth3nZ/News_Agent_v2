@@ -23,7 +23,7 @@
   // Apply initial theme
   store.setTheme(store.theme);
 
-  onMounted(() => {
+  onMounted(async () => {
     // Listen for close dialog request from Rust backend
     listen('show-close-dialog', () => {
       showCloseDialog.value = true;
@@ -40,8 +40,8 @@
     });
 
     // Bootstrap
-    loadAppSettings(handleSync);
-    loadCurrentData();
+    await loadAppSettings(handleSync);
+    await loadCurrentData();
   });
 </script>
 

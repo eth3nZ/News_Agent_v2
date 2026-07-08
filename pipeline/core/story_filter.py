@@ -115,7 +115,12 @@ def filter_validated_stories(mode: BaseMode, stories: list) -> list[dict]:
     # Progressive threshold relaxation for industry. Final score is useful for
     # ranking, but current LLMs can score technical stories conservatively, so
     # we backfill credible tech stories to the mode minimum.
-    relaxed_levels = [threshold, 6.0, 5.0] if mode.get_name() == "industry" else [threshold]
+    if mode.get_name() == "industry":
+        relaxed_levels = [threshold, 6.0, 5.0]
+    elif mode.get_name() == "paper":
+        relaxed_levels = [threshold, 6.0]
+    else:
+        relaxed_levels = [threshold]
 
     kept = []
     seen_titles = set()
@@ -156,6 +161,9 @@ def filter_validated_stories(mode: BaseMode, stories: list) -> list[dict]:
                 )
 
         kept.extend(newly_kept)
+
+        if mode.get_name() == "paper" and len(kept) >= min_stories:
+            break
 
         if level_idx > 0 and newly_kept:
             print(

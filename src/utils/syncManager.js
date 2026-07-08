@@ -12,6 +12,10 @@ const REQUIRED_TRANSLATION_FIELDS = [
   'lay_summary', 'technical_summary', 'real_world_impact', 'tl_dr'
 ];
 
+const REQUIRED_TRANSLATION_ARRAY_FIELDS = [
+  'key_terms', 'knowledge_gaps'
+];
+
 function storySourceLang(story) {
   const sampleField = story?.title || story?.summary || story?.takeaway || story?.lay_summary || story?.content || '';
   return detectTextLang(sampleField) || 'en';
@@ -19,12 +23,24 @@ function storySourceLang(story) {
 
 function missingOppositeLanguageFields(story) {
   const translations = story.translations || {};
-  const targetLang = storySourceLang(story) === 'zh' ? 'en' : 'zh';
+  const fieldTargets = translations._fieldTargets || {};
+  const oppositeLang = (text) => detectTextLang(text) === 'zh' ? 'en' : 'zh';
 
   return REQUIRED_TRANSLATION_FIELDS.some(field => {
     if (!story[field]) return false;
     const translated = translations[field] || '';
-    return !translated || detectTextLang(translated) !== targetLang;
+    const targetLang = oppositeLang(story[field]);
+    const storedTarget = fieldTargets[field] || translations._target || '';
+    return !translated || storedTarget !== targetLang;
+  }) || REQUIRED_TRANSLATION_ARRAY_FIELDS.some(field => {
+    if (!Array.isArray(story[field]) || story[field].length === 0) return false;
+    const translated = translations[`${field}_translations`];
+    const sample = story[field]
+      .map(item => Object.values(item || {}).filter(value => typeof value === 'string').join(' '))
+      .join(' ');
+    const targetLang = oppositeLang(sample);
+    const storedTarget = fieldTargets[field] || translations._target || '';
+    return !Array.isArray(translated) || translated.length === 0 || storedTarget !== targetLang;
   });
 }
 
@@ -39,33 +55,33 @@ export async function loadCurrentData() {
     store.setData(data);
     // status derived from data presence (setData handled)
 
-    // Auto-translate existing data that hasn't been translated yet.
-    // This runs in the background so UI is not blocked.
-    const needsTranslation = data?.top_stories?.some(missingOppositeLanguageFields);
-
-    if (state.baiduAppId && state.baiduSecretKey && needsTranslation) {
-      try {
-        // Detect the actual language of data to determine translation direction
-        const firstStory = data.top_stories[0];
-        const sourceLang = storySourceLang(firstStory);
-        const targetLang = sourceLang === 'zh' ? 'en' : 'zh';
-
-        const added = await translateAllStories(data, state.baiduAppId, state.baiduSecretKey, targetLang);
-        if (added) {
-          await writeDataFile(state.mode, data);
-          const freshData = await readDataFile(state.mode);
-          store.setData(freshData);
-          console.log('✅ Auto-translated missing fields on load');
-        }
-      } catch (transErr) {
-        console.error('Auto-translate failed on load:', transErr);
-        // Don't block the UI; user will see untranslated content.
-        // They can trigger a sync to retry translation.
-      }
-    }
+    await ensureCurrentDataTranslated();
   } catch (err) {
     store.setData(null);
     // status error (setError/setData(null) handled)
+  }
+}
+
+export async function ensureCurrentDataTranslated() {
+  const state = store.state;
+  const data = state.data;
+  const needsTranslation = data?.top_stories?.some(missingOppositeLanguageFields);
+
+  if (!state.baiduAppId || !state.baiduSecretKey || !needsTranslation) {
+    return false;
+  }
+
+  try {
+    const added = await autoTranslateIfNeeded(data, state);
+    if (added) {
+      const freshData = await readDataFile(state.mode);
+      store.setData(freshData);
+      console.log('✅ Auto-translated missing fields');
+    }
+    return added;
+  } catch (transErr) {
+    console.error('Auto-translate failed:', transErr);
+    return false;
   }
 }
 
@@ -110,6 +126,7 @@ async function autoTranslateIfNeeded(data, state) {
   if (!data.top_stories || data.top_stories.length === 0) return false;
 
   const { baiduAppId, baiduSecretKey } = state;
+  if (!baiduAppId || !baiduSecretKey) return false;
 
   // Detect the original language of the first story to determine translation direction
   const firstStory = data.top_stories[0];

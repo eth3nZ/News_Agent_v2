@@ -43,7 +43,8 @@ For each selected paper, you MUST provide:
 - Keep stories that score **>= 7.0**; also keep stories scoring **6.0-6.9** if they contain useful technical insights or relevant industry context.
 - Stories scoring **5.0-5.9** should only be included if exceptionally important with justification.
 - **Recency Priority**: Strongly prefer papers published in **2025 or 2026** (the last 12 months). Only include papers from 2024 or earlier if they are genuinely foundational/breakthrough work (score >= 8.0) with ongoing relevance.
-- Return a maximum of 10 total items sorted by score in descending order.
+- Return **6-10 total items** when the source pool contains enough real technical papers/articles. Aim for 10. Return fewer than 6 only if fewer than 6 valid technical items exist in the provided source data.
+- Sort selected items by score in descending order.
 - **DE-DUPLICATION**: Do not select multiple stories covering the same underlying event, paper, announcement, or development, even if they come from different sources with different titles. If two or more items report on the same topic, keep only the one with the highest score.
 
 # URL Extraction

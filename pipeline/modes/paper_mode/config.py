@@ -42,6 +42,9 @@ class PaperMode(BaseMode):
     def get_max_stories(self) -> int:
         return 10
 
+    def get_min_stories(self) -> int:
+        return 6
+
     def get_schema_class(self):
         return PaperBriefing
 

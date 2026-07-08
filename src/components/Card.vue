@@ -1,7 +1,7 @@
 <script setup>
   import { computed, ref } from 'vue';
   import { useNewsStore } from '../stores/useNewsStore.js';
-  import { t } from '../utils/translator.js';
+  import { t, translatedArray } from '../utils/translator.js';
   import { escapeHtml, normalizeHttpUrl, truncateStr } from '../utils/helpers.js';
 
   const props = defineProps({
@@ -56,10 +56,11 @@
   });
   const tldr = computed(() => t(props.story.tl_dr || '', 'tl_dr', props.useChinese, props.story));
   const paperSummary = computed(() => {
-    return t(props.story.lay_summary || props.story.technical_summary || '', 'lay_summary', props.useChinese, props.story)
-      || t(props.story.technical_summary || '', 'technical_summary', props.useChinese, props.story);
+    const lay = t(props.story.lay_summary || '', 'lay_summary', props.useChinese, props.story);
+    const tech = t(props.story.technical_summary || '', 'technical_summary', props.useChinese, props.story);
+    return lay || tech;
   });
-  const terms = computed(() => props.story.key_terms || []);
+  const terms = computed(() => translatedArray(props.story.key_terms || [], 'key_terms', props.useChinese, props.story));
   const impact = computed(() => t(props.story.real_world_impact || '', 'real_world_impact', props.useChinese, props.story));
   const dateStr = computed(() => props.story.date || 'Recent Release');
   const subScores = computed(() => props.story.sub_scores || {});

@@ -1,7 +1,7 @@
 <script setup>
   import { computed, watch } from 'vue';
   import { useNewsStore } from '../stores/useNewsStore.js';
-  import { loadCurrentData, handleSync } from '../utils/syncManager.js';
+  import { loadCurrentData, handleSync, ensureCurrentDataTranslated } from '../utils/syncManager.js';
   import { handleHistory, handleBackToLatest } from '../utils/historyManager.js';
   import { handleSettings, loadAppSettings } from '../utils/settingsManager.js';
   import { getSortOptions, getModeOptions } from '../utils/modeConfig.js';
@@ -64,6 +64,7 @@
 
   function onLangChange(e) {
     store.setLang(e.target.value);
+    ensureCurrentDataTranslated();
   }
 </script>
 
