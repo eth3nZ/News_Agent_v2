@@ -25,6 +25,25 @@
       ? 'w-full py-2 px-4 text-xs text-zinc-500 hover:text-zinc-300 transition-colors'
       : 'w-full py-2 px-4 text-xs text-gray-400 hover:text-gray-600 transition-colors'
   );
+  const labels = computed(() => {
+    if (store.lang === 'Chinese') {
+      return {
+        title: '关闭应用',
+        subtitle: '选择操作：',
+        tray: '➖ 最小化到托盘',
+        quit: '✕ 退出程序',
+        cancel: '取消',
+      };
+    }
+
+    return {
+      title: 'Close App',
+      subtitle: 'Choose an action:',
+      tray: '➖ Minimize to Tray',
+      quit: '✕ Quit App',
+      cancel: 'Cancel',
+    };
+  });
 
   function closeDialog() {
     emit('close');
@@ -32,10 +51,21 @@
 
   async function hideWindow() {
     try {
-      const appWindow = getCurrentWindow();
-      await appWindow.hide();
+      await invoke('hide_to_tray');
     } catch (err) {
-      console.warn('Failed to hide window:', err);
+      console.warn('Backend hide_to_tray failed, trying window API fallback:', err);
+      try {
+        const appWindow = getCurrentWindow();
+        await appWindow.hide();
+      } catch (fallbackErr) {
+        console.warn('Window hide failed, trying minimize fallback:', fallbackErr);
+        try {
+          const appWindow = getCurrentWindow();
+          await appWindow.minimize();
+        } catch (minimizeErr) {
+          console.warn('Failed to hide or minimize window:', minimizeErr);
+        }
+      }
     }
     closeDialog();
   }
@@ -75,26 +105,26 @@
     @click="onBackdropClick"
   >
     <div :class="dialogClass">
-      <h3 :class="titleClass">关闭应用</h3>
-      <p :class="subtitleClass">选择操作：</p>
+      <h3 :class="titleClass">{{ labels.title }}</h3>
+      <p :class="subtitleClass">{{ labels.subtitle }}</p>
       <div class="flex flex-col gap-3">
         <button
           :class="trayBtnClass"
           @click="hideWindow"
         >
-          ➖ 最小化到托盘
+          {{ labels.tray }}
         </button>
         <button
           class="w-full py-2.5 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition-colors"
           @click="quitApp"
         >
-          ✕ 退出程序
+          {{ labels.quit }}
         </button>
         <button
           :class="cancelClass"
           @click="closeDialog"
         >
-          取消
+          {{ labels.cancel }}
         </button>
       </div>
     </div>

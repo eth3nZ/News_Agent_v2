@@ -6,3 +6,4 @@ pub mod settings;
 pub mod quit_app;
 pub mod write_data;
 pub mod translate;
+pub mod window;

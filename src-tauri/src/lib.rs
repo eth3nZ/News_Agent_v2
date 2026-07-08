@@ -8,6 +8,7 @@ use commands::clear_history::clear_history_files;
 use commands::write_data::write_data_file;
 use commands::settings::{save_settings, load_settings};
 use commands::translate::baidu_translate;
+use commands::window::hide_to_tray;
 use tauri::Emitter;
 
 use std::process::Command as StdCommand;
@@ -131,6 +132,7 @@ pub fn run() {
             load_settings,
             quit_app,
             baidu_translate,
+            hide_to_tray,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
